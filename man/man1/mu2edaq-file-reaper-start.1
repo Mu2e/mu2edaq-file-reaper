@@ -1,0 +1,75 @@
+.TH MU2EDAQ-FILE-REAPER-START 1 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.SH NAME
+start-mu2edaq-file-reaper.sh \- start the file reaper as a control-room daemon
+.SH SYNOPSIS
+.B start-mu2edaq-file-reaper.sh
+[\fICONFIG\fR | \fB\-c\fR \fICONFIG\fR] [\fB\-p\fR \fIPORT\fR] [\fB\-\-no\-replace\fR]
+[\fB\-\-pid\-file\fR \fIFILE\fR] [\fIreaper options\fR ...]
+.SH DESCRIPTION
+Standardised Mu2e control-room start script, run by
+.B crs-app start file-reaper
+and by hand.  It activates
+.IR ./venv ,
+stops any copy already running out of the same directory, and executes
+.PP
+.RS
+.nf
+python file_reaper.py --config CONFIG --port PORT --daemon --pid-file FILE [options]
+.fi
+.RE
+.PP
+Starting is idempotent: a restart never leaves two daemons fighting over the
+port.  A running copy is identified both from the PID file and from the
+process table (command line mentions
+.I file_reaper.py
+and the working directory equals the script's directory, checked with
+.BR lsof (8)),
+so a hand-started copy or one whose PID file vanished is still found, while
+an unrelated process that happens to reuse a stale PID is never signalled.
+.SH OPTIONS
+.TP
+.IR CONFIG ", " "\-c \fICONFIG\fR" ", " "\-\-config=\fICONFIG\fR"
+Configuration file (default
+.IR ./config/mu2edaq-file-reaper.yaml ).
+Must exist.
+.TP
+.BR \-p ", " \-\-port " " \fIPORT\fR
+HTTP port; overrides
+.BR CRS_PORT_HTTP .
+.TP
+.B \-\-no\-replace
+Refuse to start (exit 1) if a copy is already running instead of replacing it.
+.TP
+.BI \-\-pid\-file " FILE"
+PID file used both to find a running copy and for the daemon to write
+(default
+.IR ./file-reaper.pid ).
+.TP
+Any other option is forwarded to
+.BR mu2edaq-file-reaper (1)
+unchanged, for example
+.BR \-\-dry\-run " or " \-\-verbose .
+.SH ENVIRONMENT
+.TP
+.B CRS_PORT_HTTP
+Port exported by the control room from apps.yaml (default 5004).
+.TP
+.B CRS_STOP_TIMEOUT
+Seconds to wait after SIGTERM before SIGKILL when replacing a running copy
+(default 30).
+.SH EXIT STATUS
+0 when the daemon was launched; 1 when the configuration file or the virtual
+environment is missing, or when
+.B \-\-no\-replace
+found a running copy; 2 for a malformed option.
+.SH FILES
+.TP
+.I lib/file-reaper-proc.sh
+Process discovery shared with the stop script.
+.TP
+.I ./file-reaper.pid
+PID file.
+.SH SEE ALSO
+.BR mu2edaq-file-reaper-stop (1),
+.BR mu2edaq-file-reaper-bootstrap (1),
+.BR mu2edaq-file-reaper (1)

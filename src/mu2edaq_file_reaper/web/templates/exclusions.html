@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-shield-x"></i> Exclusion rules <small class="text-muted ms-1" id="excl-count"></small></span>
+        <div class="d-flex align-items-center gap-3">
+          <div class="form-check form-switch small mb-0">
+            <input class="form-check-input" type="checkbox" id="show-all">
+            <label class="form-check-label" for="show-all">show removed / expired</label>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadExclusions()" title="Refresh">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr><th class="ps-3">#</th><th>Pattern</th><th>Kind</th><th>Area</th><th>Reason</th><th>Created</th><th>Expires</th><th>Active</th>{% if is_admin %}<th></th>{% endif %}</tr>
+            </thead>
+            <tbody id="tbody-excl"><tr><td colspan="9" class="text-muted p-3">Loading&hellip;</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-footer text-muted small">
+        A <code>path</code> rule matches one absolute path; a <code>glob</code> rule uses shell wildcards
+        (<code>*</code>, <code>?</code>, <code>[...]</code>) against the absolute path. Rules without an area apply
+        everywhere. Expired rules deactivate at the next scan.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-plus-circle"></i> Add a rule</div>
+      <div class="card-body">
+        {% if is_admin %}
+        <form id="add-form" onsubmit="addExclusion(); return false;">
+          <div class="mb-2">
+            <label class="form-label small text-muted mb-0" for="x-pattern">Pattern or path</label>
+            <input class="form-control form-control-sm font-monospace" id="x-pattern" required placeholder="/data/raw/keep_*.dat">
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-7">
+              <label class="form-label small text-muted mb-0" for="x-area">Area</label>
+              <select class="form-select form-select-sm" id="x-area">
+                <option value="">Global (every area)</option>
+                {% for a in areas %}<option value="{{ a.name }}">{{ a.label }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-5">
+              <label class="form-label small text-muted mb-0" for="x-kind">Kind</label>
+              <select class="form-select form-select-sm" id="x-kind">
+                <option value="">auto</option><option value="path">path</option><option value="glob">glob</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small text-muted mb-0" for="x-reason">Reason</label>
+            <input class="form-control form-control-sm" id="x-reason" placeholder="why this must be kept">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted mb-0" for="x-expires">Expires in <span class="text-muted">(blank = never; e.g. 7d, 12h)</span></label>
+            <input class="form-control form-control-sm" id="x-expires" placeholder="30d">
+          </div>
+          <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-shield-plus"></i> Add exclusion</button>
+        </form>
+        {% else %}
+        <p class="small text-muted mb-0">
+          <i class="bi bi-lock"></i> Adding and removing rules requires an admin session
+          (<a href="{{ url_for('views.login', next=request.path) }}">sign in</a>) or an API token with the
+          <code>operate</code> scope &mdash; see the <a href="{{ url_for('views.api_docs') }}">API page</a>.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const COLSPAN = {{ 9 if is_admin else 8 }};
+
+function exclRows(rows) {
+  if (!rows.length) return null;
+  let html = '';
+  for (const r of rows) {
+    const expired = r.expires_at && Date.parse(r.expires_at) < Date.now();
+    html += '<tr class="' + (r.active ? '' : 'text-muted') + '">';
+    html += '<td class="ps-3">' + r.id + '</td>';
+    html += '<td class="path-cell">' + escHtml(r.pattern) + '</td>';
+    html += '<td><span class="badge bg-secondary">' + escHtml(r.kind) + '</span></td>';
+    html += '<td class="small">' + (r.area ? '<a href="/areas/' + encodeURIComponent(r.area) + '">' + escHtml(r.area) + '</a>' : '<em>global</em>') + '</td>';
+    html += '<td class="small">' + escHtml(r.reason || '') + '</td>';
+    html += '<td class="small text-nowrap" title="' + escHtml(r.created_at) + '">' + fmtTs(r.created_at) + '<br><span class="text-muted">' + escHtml(r.created_by || '') + '</span></td>';
+    html += '<td class="small text-nowrap">' + (r.expires_at ? fmtTs(r.expires_at) + (expired ? ' <span class="badge bg-secondary">expired</span>' : ' <span class="text-muted">(' + fmtAge((Date.parse(r.expires_at) - Date.now()) / 1000) + ')</span>') : 'never') + '</td>';
+    html += '<td>' + (r.active ? '<span class="badge bg-success">active</span>' : '<span class="badge bg-secondary">removed</span>') + '</td>';
+    if (IS_ADMIN) {
+      html += '<td class="text-end pe-2">' + (r.active
+        ? '<button class="btn btn-sm btn-outline-danger py-0" title="Remove rule" onclick="removeExclusion(' + r.id + ',' + escHtml(JSON.stringify(r.pattern)) + ')"><i class="bi bi-x-lg"></i></button>'
+        : '') + '</td>';
+    }
+    html += '</tr>';
+  }
+  return html;
+}
+
+function loadExclusions() {
+  const all = document.getElementById('show-all').checked;
+  apiFetch('/api/v1/exclusions' + (all ? '?all=1' : ''))
+    .then(d => {
+      const rows = d.exclusions || [];
+      document.getElementById('excl-count').textContent = '(' + rows.length + ')';
+      fillTable('tbody-excl', exclRows(rows), COLSPAN, all ? 'No exclusion rules have ever been added.' : 'No active exclusion rules.');
+      const stamp = document.getElementById('last-update');
+      if (stamp) stamp.textContent = '✓ Updated ' + new Date().toLocaleTimeString();
+    })
+    .catch(err => fillTable('tbody-excl', null, COLSPAN, 'Could not load exclusions: ' + err.message));
+}
+
+function addExclusion() {
+  const body = {
+    pattern: document.getElementById('x-pattern').value.trim(),
+    area: document.getElementById('x-area').value || null,
+    kind: document.getElementById('x-kind').value || null,
+    reason: document.getElementById('x-reason').value.trim() || null,
+    expires_in: document.getElementById('x-expires').value.trim() || null,
+  };
+  if (!body.pattern) return;
+  postJSON('/api/v1/exclusions', body)
+    .then(d => {
+      showToast('Added exclusion #' + d.exclusion.id + ' (' + d.exclusion.kind + ')', 'success');
+      document.getElementById('add-form').reset();
+      loadExclusions();
+    })
+    .catch(err => showToast('Add failed: ' + err.message, 'danger'));
+}
+
+function removeExclusion(id, pattern) {
+  confirmModal('Remove exclusion #' + id, '<p class="small mb-0">Rule <code>' + escHtml(pattern) +
+    '</code> will no longer protect matching files. This is recorded in the history.</p>', function () {
+    del('/api/v1/exclusions/' + id)
+      .then(() => { showToast('Removed exclusion #' + id, 'success'); loadExclusions(); })
+      .catch(err => showToast('Remove failed: ' + err.message, 'danger'));
+  }, {okLabel: 'Remove'});
+}
+
+document.getElementById('show-all').addEventListener('change', loadExclusions);
+loadExclusions();
+</script>
+{% endblock %}

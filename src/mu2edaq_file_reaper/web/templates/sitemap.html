@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-diagram-3"></i> Pages</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr><th class="ps-3" style="width:34%">Page</th><th>Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="ps-3"><a href="{{ url_for('views.index') }}">/ &mdash; Areas</a></td>
+                <td class="small">Every configured area: state, usage, tier markers, queue sizes, last scan and
+                  progress. Admin controls: pause / resume, enable / disable, rescan, dry-run plan. Live.</td></tr>
+            <tr><td class="ps-3"><code>/areas/&lt;name&gt;</code> &mdash; Area detail</td>
+                <td class="small">One area: usage and history sparkline, tiers with trigger / stop marks, rejected
+                  candidates, both queues with per-file Exclude, recent audit events, configuration. Live.</td></tr>
+            <tr><td class="ps-3"><a href="{{ url_for('views.queues') }}">/queues &mdash; Queues</a></td>
+                <td class="small">Flattened compress / delete queues across areas with filters, sorting and an entry
+                  detail modal. Live.</td></tr>
+            <tr><td class="ps-3"><a href="{{ url_for('views.history') }}">/history &mdash; History</a></td>
+                <td class="small">Query the audit trail by area, path glob, event type, tier, time range; paging,
+                  detail JSON and CSV download.</td></tr>
+            <tr><td class="ps-3"><a href="{{ url_for('views.exclusions') }}">/exclusions &mdash; Exclusions</a></td>
+                <td class="small">Protected paths and globs, global or per area, with optional expiry. Admin: add / remove.</td></tr>
+            <tr><td class="ps-3"><a href="{{ url_for('views.notifications') }}">/notifications &mdash; Notifications</a></td>
+                <td class="small">Channel status and the recent notification log. Admin: send a test. Live.</td></tr>
+            <tr><td class="ps-3"><a href="{{ url_for('views.tokens') }}">/tokens &mdash; Tokens</a></td>
+                <td class="small">API bearer tokens: list, create (plaintext shown once), revoke. Admin only.</td></tr>
+            <tr><td class="ps-3"><a href="{{ url_for('views.config') }}">/config &mdash; Config</a></td>
+                <td class="small">Settings in effect, notification channels, parsed areas with tiers, config issues,
+                  raw YAML.</td></tr>
+            <tr><td class="ps-3"><a href="{{ url_for('views.api_docs') }}">/api &mdash; API</a></td>
+                <td class="small">Every JSON endpoint with scope, curl and CLI examples; authentication; field references.</td></tr>
+            <tr><td class="ps-3"><a href="{{ url_for('views.about') }}">/about &mdash; About</a></td>
+                <td class="small">Version, uptime, host, dependency versions, optional integrations.</td></tr>
+            <tr><td class="ps-3"><a href="{{ url_for('views.login') }}">/login</a>, <code>POST /logout</code></td>
+                <td class="small">Open / close the admin session that unlocks mutating controls.</td></tr>
+            <tr><td class="ps-3"><a href="{{ url_for('views.sitemap') }}">/sitemap</a></td>
+                <td class="small">This page.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-braces"></i> JSON API <code>/api/v1</code></div>
+      <div class="card-body">
+        <ul class="mb-0 small">
+          <li><code><a href="/api/v1/health">/health</a></code>, <code><a href="/api/v1/version">/version</a></code>, <code><a href="/api/v1/whoami">/whoami</a></code> &mdash; liveness, identity</li>
+          <li><code><a href="/api/v1/state">/state</a></code>, <code><a href="/api/v1/areas">/areas</a></code>, <code>/areas/&lt;name&gt;</code> &mdash; area snapshots</li>
+          <li><code>POST /areas/&lt;name&gt;/{pause,resume,rescan,disable,enable}</code>, <code>POST /dry-run/&lt;name&gt;</code> &mdash; operator actions</li>
+          <li><code><a href="/api/v1/queues">/queues</a></code>, <code>/queues/&lt;id&gt;</code> &mdash; queue entries</li>
+          <li><code><a href="/api/v1/exclusions">/exclusions</a></code> (GET, POST, DELETE <code>/&lt;id&gt;</code>) &mdash; protected paths</li>
+          <li><code><a href="/api/v1/history">/history</a></code>, <code><a href="/api/v1/history/types">/history/types</a></code> &mdash; audit trail, CSV export</li>
+          <li><code><a href="/api/v1/notifications">/notifications</a></code>, <code>POST /notifications/test</code></li>
+          <li><code>/tokens</code> (GET, POST, DELETE <code>/&lt;id&gt;</code>) &mdash; admin</li>
+          <li><code><a href="/api/v1/config">/config</a></code> &mdash; active configuration</li>
+        </ul>
+      </div>
+      <div class="card-footer text-muted small">
+        Full reference with scopes and examples on the <a href="{{ url_for('views.api_docs') }}">API page</a>.
+        Static assets: <code>/static/reaper.js</code>, <code>/static/reaper.css</code>.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,68 @@
+.TH MAKE_DEMO_TREE 1 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.SH NAME
+make_demo_tree.py \- build a demo file tree and fake-usage file for mu2edaq-file-reaper
+.SH SYNOPSIS
+.B python tools/make_demo_tree.py
+.I DIR
+[\fB\-\-files\fR \fIN\fR] [\fB\-\-size\fR \fIBYTES\fR] [\fB\-\-days\fR \fID\fR]
+[\fB\-\-used\-pct\fR \fIP\fR] [\fB\-\-total\fR \fIBYTES\fR] [\fB\-\-usage\-file\fR \fIFILE\fR]
+[\fB\-\-random\-content\fR] [\fB\-\-seed\fR \fIS\fR]
+.SH DESCRIPTION
+Creates
+.I N
+files under
+.I DIR
+(in a handful of subdirectories) whose modification and access times are
+spread over the last
+.I D
+days, then writes a JSON file for the
+.B reaper.fake_usage_file
+test hook mapping the realpath of
+.I DIR
+to
+.IR "[total, used, free]"
+at
+.I P
+percent used.  Together with
+.I config/mu2edaq-file-reaper-test.yaml
+this lets the whole warning / critical / full walk be exercised on a laptop
+without filling a disk: edit the
+.I used
+value in the JSON file while the reaper runs.
+.SH OPTIONS
+.TP
+.BI \-\-files " N"
+Number of files (default 200).
+.TP
+.BI \-\-size " BYTES"
+Mean file size; each file is 0.5 to 1.5 times this (default 65536).
+.TP
+.BI \-\-days " D"
+Age spread in days (default 30).
+.TP
+.BI \-\-used\-pct " P"
+Fake used percentage (default 82).
+.TP
+.BI \-\-total " BYTES"
+Fake capacity (default 100 MiB).
+.TP
+.BI \-\-usage\-file " FILE"
+Where to write the JSON (default
+.IR ./data/demo-usage.json ).
+Existing entries for other paths are kept.
+.TP
+.B \-\-random\-content
+Incompressible content, to exercise the incompressible-skip path.
+.TP
+.BI \-\-seed " S"
+Random seed (default 1) for reproducible trees.
+.SH EXAMPLE
+.nf
+python tools/make_demo_tree.py ./data/demo --files 300 --days 30 --used-pct 92
+./start-mu2edaq-file-reaper.sh -c config/mu2edaq-file-reaper-test.yaml
+mu2edaq-reaper --url http://localhost:5004 --admin-token demo-admin token create demo --scopes read,operate,admin --save
+mu2edaq-reaper plan data-demo
+.fi
+.SH SEE ALSO
+.BR mu2edaq-file-reaper (1),
+.BR mu2edaq-file-reaper.conf (5)

@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-info-circle"></i> About</div>
+      <div class="card-body">
+        <h5>mu2edaq File Reaper <small class="text-muted">v{{ app_version }}</small></h5>
+        <p class="mb-2">
+          Policy-driven disk cleanup for the Mu2e DAQ. Each configured <em>area</em> is measured on every
+          scan; when used space crosses a tier threshold the tier's policy builds an ordered queue of eligible
+          files and acts on it until the tier's stop mark is reached:
+        </p>
+        <ul class="mb-2">
+          <li><strong>warning</strong> &mdash; by default <code>LRU-Compress</code>: compress least-recently-accessed files.</li>
+          <li><strong>critical</strong> &mdash; by default <code>LRU-Delete</code>: delete least-recently-accessed files.</li>
+          <li><strong>full</strong> &mdash; by default <code>Age-Delete</code>: delete the oldest files by modification time.</li>
+        </ul>
+        <p class="mb-0 small text-muted">
+          Every decision (queue add, action, tier change, pause, exclusion, token) is written to an audit history that
+          the <a href="{{ url_for('views.history') }}">History</a> page, the JSON API and the
+          <code>mu2edaq-reaper</code> command line tool can query. Exclusions protect files; pause / disable stop
+          actions per area; dry-run mode plans without touching anything.
+        </p>
+      </div>
+      <div class="card-footer text-muted small">
+        Sibling of <em>mu2edaq Disk Watcher</em>; the two share their look and API conventions.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-activity"></i> Runtime</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr><th class="ps-3" style="width:45%">Label</th><td>{{ settings.label }}</td></tr>
+            <tr><th class="ps-3">Uptime</th><td>{{ uptime_str }}</td></tr>
+            <tr><th class="ps-3">Host</th><td><code>{{ hostname }}</code></td></tr>
+            <tr><th class="ps-3">Mode</th>
+                <td>{% if settings.daemon %}<span class="badge bg-secondary">daemon</span>{% else %}<span class="badge bg-secondary">foreground</span>{% endif %}
+                    PID&nbsp;{{ pid }}
+                    {% if settings.dry_run %}<span class="badge bg-warning text-dark">DRY RUN</span>{% endif %}</td></tr>
+            <tr><th class="ps-3">Config file</th><td><code class="small">{{ settings.config_path or '(defaults)' }}</code></td></tr>
+            <tr><th class="ps-3">Database</th><td><code class="small">{{ db_url }}</code></td></tr>
+            <tr><th class="ps-3">Scan interval</th><td>{{ scan_display }}</td></tr>
+            <tr><th class="ps-3">Areas</th><td>{{ n_areas }}</td></tr>
+            <tr><th class="ps-3">Queued</th><td>{{ n_compress }} compress, {{ n_delete }} delete</td></tr>
+            <tr><th class="ps-3">Web / API port</th><td>{{ settings.web_port }}{% if settings.api_port and settings.api_port != settings.web_port %} / {{ settings.api_port }}{% endif %}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-box-seam"></i> Dependencies</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr><th class="ps-3" style="width:45%">Python</th><td>{{ py_ver }}</td></tr>
+            <tr><th class="ps-3">Operating system</th><td class="small">{{ os_info }}</td></tr>
+            <tr><th class="ps-3">Flask</th><td>{{ flask_ver }}</td></tr>
+            <tr><th class="ps-3">Jinja2</th><td>{{ jinja_ver }}</td></tr>
+            <tr><th class="ps-3">PyYAML</th><td>{{ yaml_ver }}</td></tr>
+            <tr><th class="ps-3">SQLAlchemy</th><td>{{ sqla_ver }}</td></tr>
+            <tr><th class="ps-3">Bootstrap</th><td>5.3.3 <small class="text-muted">(CDN)</small></td></tr>
+            <tr><th class="ps-3">Bootstrap Icons</th><td>1.11.3 <small class="text-muted">(CDN)</small></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer text-muted small">
+        Bootstrap is loaded from jsDelivr. On a host with no outbound internet access the pages still work but
+        render unstyled.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-plug"></i> Optional integrations</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            {% for mod, present in integrations.items() %}
+            <tr><th class="ps-3" style="width:45%"><code>{{ mod }}</code></th>
+                <td>{% if present %}<span class="badge bg-success">available</span>{% else %}<span class="badge bg-secondary">not installed</span>{% endif %}
+                  <small class="text-muted ms-1">
+                    {% if mod == 'mu2edaq_discovery' %}service registration
+                    {% elif mod == 'mu2edaq_notify' %}DAQ notification bus
+                    {% elif mod == 'zmq' %}ZeroMQ alert channel
+                    {% elif mod == 'zstandard' %}zstd compressor
+                    {% elif mod == 'daq_alert' %}DAQ alert channel{% endif %}
+                  </small></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer text-muted small">
+        A missing integration disables only the feature that needs it; the core reaper runs on the standard
+        library plus Flask, SQLAlchemy and PyYAML.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-link-45deg"></i> Elsewhere</div>
+      <div class="card-body">
+        <ul class="mb-0">
+          <li><a href="{{ url_for('views.api_docs') }}">API reference</a> &mdash; every JSON endpoint, authentication, field references</li>
+          <li><a href="{{ url_for('views.sitemap') }}">Sitemap</a> &mdash; the structure of this application</li>
+          <li><a href="{{ url_for('views.config') }}">Config</a> &mdash; settings and areas currently in effect</li>
+          <li><a href="{{ repo_url }}">{{ repo_url }}</a> &mdash; source, issues</li>
+          <li><a href="{{ repo_url }}/blob/main/CHANGELOG.md">CHANGELOG.md</a> &mdash; what changed in this version</li>
+          <li><code>man mu2edaq-file-reaper</code>, <code>man 5 mu2edaq-file-reaper.conf</code>, <code>man mu2edaq-reaper</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

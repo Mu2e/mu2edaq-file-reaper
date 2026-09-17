@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+  {{ m.stat_card('areas', 'good',        'GOOD',        'good',        'Below every tier threshold') }}
+  {{ m.stat_card('areas', 'warning',     'WARNING',     'warning',     'Warning tier active') }}
+  {{ m.stat_card('areas', 'critical',    'CRITICAL',    'critical',    'Critical tier active') }}
+  {{ m.stat_card('areas', 'full',        'FULL',        'full',        'Full tier active') }}
+  {{ m.stat_card('areas', 'paused',      'PAUSED',      'paused',      'Scanning, but no actions') }}
+  {{ m.stat_card('areas', 'disabled',    'DISABLED',    'disabled',    'Out of service') }}
+  {{ m.stat_card('areas', 'unavailable', 'UNAVAILABLE', 'unavailable', 'UNKNOWN (not yet measured) or MISSING (path unreachable)') }}
+  {{ m.stat_card('areas', 'total',       'TOTAL',       'total') }}
+</div>
+
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>
+      <i class="bi bi-hdd-stack"></i> Areas
+      <small class="text-muted ms-1" id="areas-count"></small>
+      <small class="text-muted ms-2" id="areas-queues"></small>
+    </span>
+    {{ m.refresh_controls() }}
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            {{ m.sort_th('areas', 'status', 'Status') }}
+            {{ m.sort_th('areas', 'name',   'Label / Path') }}
+            {{ m.sort_th('areas', 'used',   'Used') }}
+            <th>Tiers <small class="text-muted fw-normal">(trigger&rarr;stop)</small></th>
+            <th>Active tier / policy</th>
+            {{ m.sort_th('areas', 'queues', 'Queues') }}
+            {{ m.sort_th('areas', 'scan',   'Last scan') }}
+            <th>Progress</th>
+            {% if is_admin %}<th>Actions</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody id="tbody-areas">
+          <tr><td colspan="9" class="text-muted p-3">Loading&hellip;</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer text-muted small d-flex justify-content-between flex-wrap gap-2">
+    <span>Click a row for the area's detail page: usage history, tiers, queues and audit trail.</span>
+    <span id="scheduler-health"></span>
+  </div>
+</div>
+
+{{ m.admin_hint('Pause / resume / disable / enable / rescan / dry-run') }}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const COLSPAN = {{ 9 if is_admin else 8 }};
+
+registerTable('areas', {
+  status: r => r.rank,
+  name:   r => r.label || r.path,
+  used:   r => (r.usage ? r.usage.used_pct : null),
+  queues: r => (r.queues.compress.total + r.queues.delete.total),
+  scan:   r => (r.last_scan_at ? Date.parse(r.last_scan_at) / 1000 : null),
+}, 'status', -1);
+
+function statusTitle(a) {
+  const bits = [];
+  if (a.paused) bits.push('paused' + (a.paused_by ? ' by ' + a.paused_by : '') +
+    (a.paused_reason ? ': ' + a.paused_reason : ''));
+  if (a.disabled) bits.push('disabled' + (a.disabled_by ? ' by ' + a.disabled_by : '') +
+    (a.disabled_reason ? ': ' + a.disabled_reason : ''));
+  if (a.selected_tier) bits.push('acting tier: ' + a.selected_tier);
+  if (a.active_tiers && a.active_tiers.length) bits.push('active: ' + a.active_tiers.join(', '));
+  if (a.dry_run) bits.push('area dry-run');
+  if (a.atime_mode && a.atime_mode !== 'unknown') bits.push('atime: ' + a.atime_mode);
+  for (const w of (a.warnings || [])) bits.push(w);
+  for (const e of (a.config_errors || [])) bits.push('config: ' + e);
+  return bits.join(' | ') || a.state;
+}
+
+function areaRows(entries) {
+  if (!entries.length) return null;
+  let html = '';
+  for (const a of entries) {
+    const state = a.state || 'UNKNOWN';
+    const href = '/areas/' + encodeURIComponent(a.name);
+    const rowCls = 'row-' + state.toLowerCase() + (a.progress && a.progress.acting ? ' row-acting' : '') + ' clickable';
+    html += '<tr class="' + rowCls + '" data-href="' + escHtml(href) + '">';
+    html += '<td>' + badge(state, statusTitle(a)) +
+      (a.dry_run ? ' <span class="badge bg-warning text-dark ms-1" title="This area is in dry-run">dry</span>' : '') +
+      ((a.config_errors || []).length ? ' <i class="bi bi-exclamation-triangle-fill text-danger ms-1" title="' +
+        escHtml(a.config_errors.join('; ')) + '"></i>' : '') + '</td>';
+    html += nameCell(a, href);
+
+    const pct = a.usage ? a.usage.used_pct : null;
+    const us = a.usage_str || {};
+    html += progressBar(pct, BAR_CLASS[state] || 'bg-secondary',
+      (us.used || DASH) + ' used of ' + (us.total || DASH),
+      escHtml(us.free || DASH) + ' free of ' + escHtml(us.total || DASH));
+
+    html += tiersCell(a.tiers, a.selected_tier);
+
+    if (a.selected_tier && a.tiers && a.tiers[a.selected_tier]) {
+      const t = a.tiers[a.selected_tier];
+      html += '<td class="small">' + badge(a.selected_tier) + ' <span class="text-nowrap">' + escHtml(t.policy) + '</span>' +
+        (t.bytes_to_stop_str ? '<br><span class="text-muted">' + escHtml(t.bytes_to_stop_str) + ' to stop</span>' : '') + '</td>';
+    } else if (a.active_tiers && a.active_tiers.length) {
+      html += '<td class="small text-muted">' + a.active_tiers.map(t => badge(t)).join(' ') + '</td>';
+    } else {
+      html += '<td class="small text-muted">' + DASH + '</td>';
+    }
+
+    const qc = a.queues.compress.total, qd = a.queues.delete.total;
+    html += '<td class="small text-nowrap">' +
+      '<a href="/queues?area=' + encodeURIComponent(a.name) + '&kind=compress" class="text-decoration-none">' +
+      '<span class="badge badge-compress">compress</span> ' + qc + '</a><br>' +
+      '<a href="/queues?area=' + encodeURIComponent(a.name) + '&kind=delete" class="text-decoration-none">' +
+      '<span class="badge badge-delete">delete</span> ' + qd + '</a></td>';
+
+    const sc = a.scan || {};
+    if (a.last_scan_at || sc.finished) {
+      html += '<td class="small text-nowrap" title="' + escHtml(fmtTs(a.last_scan_at || sc.finished)) +
+        (sc.reason ? ' — ' + escHtml(sc.reason) : '') + '">' +
+        fmtAgo(a.last_scan_at || sc.finished) +
+        (sc.outcome ? ' ' + badge(sc.outcome) : '') + '<br>' +
+        '<span class="text-muted">' + (sc.acted || 0) + ' acted, ' + escHtml(sc.bytes_freed_str || fmtBytes(sc.bytes_freed || 0)) + ' freed' +
+        (sc.duration_s !== null && sc.duration_s !== undefined ? ', ' + Number(sc.duration_s).toFixed(1) + ' s' : '') + '</span>' +
+        (a.next_scan_in_s !== null && a.next_scan_in_s !== undefined ? '<br><span class="text-muted">next in ' + fmtAge(a.next_scan_in_s) + '</span>' : '') +
+        '</td>';
+    } else {
+      html += '<td class="small text-muted">never</td>';
+    }
+
+    const p = a.progress || {};
+    if (p.acting) {
+      html += '<td class="small"><span class="spinner-border spinner-border-sm text-primary me-1"></span>' +
+        p.acted + ' done, ' + p.remaining + ' left, ' + fmtBytes(p.bytes_freed) + '<br>' +
+        '<span class="path-cell text-muted">' + escHtml(p.current_path || '') + '</span></td>';
+    } else {
+      html += '<td class="small text-muted">' + (a.reject_counts && Object.keys(a.reject_counts).length
+        ? 'idle' : DASH) + '</td>';
+    }
+
+    if (IS_ADMIN) html += '<td class="text-nowrap" onclick="event.stopPropagation()">' + areaActionButtons(a) + '</td>';
+    html += '</tr>';
+  }
+  return html;
+}
+
+function renderAreas(data) {
+  const s = data.summary || {};
+  renderStatCards('areas', {
+    good: s.good || 0, warning: s.warning || 0, critical: s.critical || 0, full: s.full || 0,
+    paused: s.paused || 0, disabled: s.disabled || 0,
+    unavailable: (s.unknown || 0) + (s.missing || 0), total: s.total || 0,
+  });
+  const entries = data.areas || [];
+  const countEl = document.getElementById('areas-count');
+  if (countEl) countEl.textContent = '(' + entries.length + ')';
+  const qEl = document.getElementById('areas-queues');
+  if (qEl) qEl.textContent = 'queued: ' + (s.queued_compress || 0) + ' compress, ' +
+    (s.queued_delete || 0) + ' delete' + (s.acting ? ', ' + s.acting + ' acting' : '');
+  updateSortIndicators('areas');
+  fillTable('tbody-areas', areaRows(sortRows('areas', entries)), COLSPAN,
+    'No areas configured. Add entries under areas: in the YAML config file.');
+  document.querySelectorAll('#tbody-areas tr[data-href]').forEach(tr => {
+    tr.addEventListener('click', ev => {
+      if (ev.target.closest('a, button')) return;
+      window.location = tr.getAttribute('data-href');
+    });
+  });
+  const sh = document.getElementById('scheduler-health');
+  if (sh && data.scan_interval !== undefined) {
+    sh.textContent = 'scan interval ' + fmtAge(data.scan_interval);
+  }
+}
+
+startDashboard('/api/v1/areas', renderAreas);
+</script>
+{% endblock %}

@@ -1,0 +1,72 @@
+# mu2e-file-reaper-dl-01.yaml — file reaper configuration for the mu2e-dl-01 data logger
+#
+# Companion to mu2edaq-diskwatcher/config/mu2e-diskwatcher-dl-01.yaml, which
+# only *watches* these volumes.  Everything here is host-local.
+#
+#     ./start-mu2edaq-file-reaper.sh -c ./config/mu2e-file-reaper-dl-01.yaml
+#
+# Thresholds are percent USED (df convention).  Start in dry_run: true, watch
+# /queues and /history for a day, then flip dry_run to false.
+
+reaper:
+  label: "dl-01"
+  web_port: 5004
+  scan_interval: 600
+  dry_run: true                       # <-- flip to false once the queues look right
+  pid_file: "./file-reaper.pid"
+  log_file: "./logs/mu2e-file-reaper-dl-01.log"
+  admin_token: ""                     # set MU2EDAQ_FILE_REAPER_ADMIN_TOKEN in .env
+
+database:
+  url: "sqlite:///./data/file-reaper-dl-01.db"
+  history_retention_days: 730
+
+defaults:
+  settle_seconds: 600                 # FTS may still be reading a file it just closed
+
+areas:
+  # Raw data written by the data logger and shipped by mu2edaq-fts.  Only files
+  # FTS has marked COMPLETED/DELETED are ever eligible.
+  - path: /data/raw
+    label: "Raw data (/data/raw)"
+    fts_db: /home/mu2edaq/mu2edaq-main/mu2edaq-fts/fts_status.db
+    thresholds: {warning: 75, critical: 85, full: 92}
+    tiers:
+      warning:  {policy: LRU-Compress, min_age: "14d"}
+      critical: {policy: LRU-Delete,   min_age: "7d"}
+      full:     {policy: Age-Delete,   min_age: "2d", low_water: 12}
+
+  - path: /data/staging
+    label: "Staging (/data/staging)"
+    fts_db: /home/mu2edaq/mu2edaq-main/mu2edaq-fts/fts_status.db
+    thresholds: {warning: 75, critical: 85, full: 92}
+    tiers:
+      warning:  null                  # no compression on staging
+      critical: {policy: LRU-Delete, min_age: "3d"}
+      full:     {policy: Age-Delete, min_age: "1d"}
+
+  - path: /daqlogs
+    label: "DAQ logs"
+    include: ["*.log", "*.log.*", "*.txt", "*.out", "*.err", "*.json"]
+    thresholds: {warning: 80, critical: 90, full: 95}
+    tiers:
+      warning:  {policy: Age-Compress, min_age: "2d"}
+      critical: {policy: Age-Delete,   min_age: "30d"}
+      full:     {policy: Age-Delete,   min_age: "7d", low_water: 15}
+    prune_empty_dirs: true
+
+  - path: /scratch/mu2e
+    label: "Scratch"
+    enabled: false                    # enable from the UI when needed
+    tiers:
+      warning:  {policy: LRU-Delete, min_age: "30d"}
+      critical: {policy: LRU-Delete, min_age: "7d"}
+      full:     {policy: Age-Delete, min_age: "1d"}
+
+notifications:
+  rate_limit_seconds: 900
+  mu2e_notify:  {enabled: true,  min_severity: warning, source: "file-reaper", category: "DAQ"}
+  daq_messages: {enabled: true,  min_severity: warning, host: "mu2e-mgr-01.fnal.gov", port: 5555}
+  bigredbox:    {enabled: false, min_severity: critical}
+  email:        {enabled: false, min_severity: critical, to: []}
+  slack:        {enabled: false, min_severity: warning}

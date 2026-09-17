@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block content %}
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-clock-history"></i> Query the audit history</div>
+  <div class="card-body">
+    <form id="hist-form" class="row g-2 align-items-end" onsubmit="runQuery(0); return false;">
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-0" for="h-area">Area</label>
+        <select class="form-select form-select-sm" id="h-area">
+          <option value="">All</option>
+          {% for a in areas %}
+          <option value="{{ a.name }}" {% if q.get('area') == a.name %}selected{% endif %}>{{ a.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-0" for="h-path">Path (glob)</label>
+        <input class="form-control form-control-sm" id="h-path" placeholder="/data/raw/run_00*.dat" value="{{ q.get('path', '') }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-0" for="h-types">Event types <span class="text-muted">(multi)</span></label>
+        <select class="form-select form-select-sm" id="h-types" multiple size="3" data-selected="{{ q.get('type', '') }}">
+          <option disabled>loading&hellip;</option>
+        </select>
+      </div>
+      <div class="col-md-1">
+        <label class="form-label small text-muted mb-0" for="h-tier">Tier</label>
+        <select class="form-select form-select-sm" id="h-tier">
+          <option value="">Any</option>
+          {% for t in ['warning', 'critical', 'full'] %}
+          <option value="{{ t }}" {% if q.get('tier') == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-0" for="h-since">Since / until <span class="text-muted">(ISO or 24h, 7d)</span></label>
+        <div class="input-group input-group-sm">
+          <input class="form-control" id="h-since" placeholder="24h" value="{{ q.get('since', '') }}">
+          <input class="form-control" id="h-until" placeholder="until" value="{{ q.get('until', '') }}">
+        </div>
+      </div>
+      <div class="col-md-1">
+        <label class="form-label small text-muted mb-0" for="h-limit">Limit</label>
+        <select class="form-select form-select-sm" id="h-limit">
+          {% for n in [25, 50, 100, 250, 500, 1000] %}
+          <option value="{{ n }}" {% if (q.get('limit') or '100') == n|string %}selected{% endif %}>{{ n }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-1">
+        <label class="form-label small text-muted mb-0" for="h-order">Order</label>
+        <select class="form-select form-select-sm" id="h-order">
+          <option value="desc" {% if q.get('order', 'desc') == 'desc' %}selected{% endif %}>newest</option>
+          <option value="asc" {% if q.get('order') == 'asc' %}selected{% endif %}>oldest</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-0" for="h-scan">Scan id</label>
+        <input class="form-control form-control-sm" id="h-scan" placeholder="uuid" value="{{ q.get('scan_id', '') }}">
+      </div>
+      <div class="col-md-auto d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Query</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearForm()">Clear</button>
+        <a class="btn btn-sm btn-outline-success" id="csv-link" href="/api/v1/history?format=csv" download="reaper-history.csv">
+          <i class="bi bi-filetype-csv"></i> Download CSV
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-table"></i> Events <small class="text-muted ms-1" id="hist-count"></small></span>
+    <div class="btn-group btn-group-sm" role="group">
+      <button class="btn btn-outline-secondary" id="pg-prev" onclick="page(-1)" disabled><i class="bi bi-chevron-left"></i> Prev</button>
+      <span class="btn btn-outline-secondary disabled" id="pg-info">&mdash;</span>
+      <button class="btn btn-outline-secondary" id="pg-next" onclick="page(1)" disabled>Next <i class="bi bi-chevron-right"></i></button>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr><th class="ps-3" style="width:1.5em"></th><th>Time</th><th>Area</th><th>Event</th><th>Path</th><th>Tier</th><th>Queue</th>
+              <th>Outcome</th><th>Reason</th><th>Size / freed</th><th>Used %</th><th>Count</th><th>Actor</th></tr>
+        </thead>
+        <tbody id="tbody-hist"><tr><td colspan="13" class="text-muted p-3">Loading&hellip;</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer text-muted small">
+    Click a row to expand its <code>detail</code> JSON. The CSV link exports the current filter without the
+    limit/offset paging (server cap 10000 rows per request).
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let offset = 0, total = 0, limit = 100;
+let lastEvents = [];
+
+function selectedTypes() {
+  return Array.from(document.getElementById('h-types').selectedOptions).map(o => o.value).filter(Boolean);
+}
+
+function params(withPaging) {
+  limit = parseInt(document.getElementById('h-limit').value, 10) || 100;
+  const p = {
+    area: document.getElementById('h-area').value,
+    path: document.getElementById('h-path').value.trim(),
+    type: selectedTypes().join(','),
+    tier: document.getElementById('h-tier').value,
+    since: document.getElementById('h-since').value.trim(),
+    until: document.getElementById('h-until').value.trim(),
+    scan_id: document.getElementById('h-scan').value.trim(),
+    order: document.getElementById('h-order').value,
+  };
+  if (withPaging) { p.limit = limit; p.offset = offset; }
+  return p;
+}
+
+function updateCsvLink() {
+  const p = params(false);
+  p.format = 'csv';
+  p.limit = 10000;
+  document.getElementById('csv-link').href = '/api/v1/history' + qs(p);
+}
+
+function toggleDetail(i) {
+  const row = document.getElementById('detail-' + i);
+  if (row) row.hidden = !row.hidden;
+}
+
+function eventRows(events) {
+  if (!events.length) return null;
+  let html = '';
+  events.forEach((ev, i) => {
+    html += '<tr class="clickable" onclick="toggleDetail(' + i + ')">';
+    html += '<td class="ps-3 text-muted"><i class="bi bi-chevron-expand"></i></td>';
+    html += '<td class="small text-nowrap" title="' + escHtml(ev.ts) + '">' + fmtTs(ev.ts) + '</td>';
+    html += '<td class="small">' + (ev.area ? '<a href="/areas/' + encodeURIComponent(ev.area) + '" onclick="event.stopPropagation()">' + escHtml(ev.area) + '</a>' : '<span class="text-muted">global</span>') + '</td>';
+    html += '<td><span class="event-type">' + escHtml(ev.event_type) + '</span></td>';
+    html += '<td class="path-cell">' + escHtml(ev.path || '') + '</td>';
+    html += '<td>' + (ev.tier ? badge(ev.tier) : '') + '</td>';
+    html += '<td>' + (ev.queue ? badge(ev.queue) : '') + '</td>';
+    html += '<td>' + (ev.outcome ? badge(ev.outcome) : '') + '</td>';
+    html += '<td class="small">' + escHtml(ev.reason || '') + '</td>';
+    html += '<td class="small text-nowrap">' + (ev.size_bytes !== null && ev.size_bytes !== undefined ? fmtBytes(ev.size_bytes) : '') +
+      (ev.bytes_freed ? ' <span class="text-success">&minus;' + fmtBytes(ev.bytes_freed) + '</span>' : '') + '</td>';
+    html += '<td class="small text-nowrap">' + (ev.used_pct_before !== null && ev.used_pct_before !== undefined
+      ? fmtPct(ev.used_pct_before) + (ev.used_pct_after !== null && ev.used_pct_after !== undefined ? ' &rarr; ' + fmtPct(ev.used_pct_after) : '')
+      : (ev.used_pct_after !== null && ev.used_pct_after !== undefined ? fmtPct(ev.used_pct_after) : '')) + '</td>';
+    html += '<td class="small">' + (ev.count !== null && ev.count !== undefined ? ev.count : '') + '</td>';
+    html += '<td class="small">' + escHtml(ev.actor || '') + '</td>';
+    html += '</tr>';
+    const meta = {id: ev.id, scan_id: ev.scan_id, duration_s: ev.duration_s, policy: ev.policy};
+    html += '<tr class="detail-row" id="detail-' + i + '" hidden><td></td><td colspan="12">' +
+      '<div class="row g-2"><div class="col-md-4">' + kvTable(meta) + '</div>' +
+      '<div class="col-md-8">' + jsonPre(ev.detail || {}) + '</div></div></td></tr>';
+  });
+  return html;
+}
+
+function runQuery(newOffset) {
+  if (newOffset !== undefined) offset = Math.max(0, newOffset);
+  const p = params(true);
+  updateCsvLink();
+  const browser = Object.assign({}, p); delete browser.limit; delete browser.offset;
+  history.replaceState(null, '', location.pathname + qs(browser));
+  apiFetch('/api/v1/history' + qs(p))
+    .then(data => {
+      total = data.total || 0;
+      lastEvents = data.events || [];
+      fillTable('tbody-hist', eventRows(lastEvents), 13, 'No events match this query.');
+      document.getElementById('hist-count').textContent = '(' + total + ' matching)';
+      const from = total ? offset + 1 : 0, to = Math.min(offset + limit, total);
+      document.getElementById('pg-info').textContent = from + '–' + to + ' of ' + total;
+      document.getElementById('pg-prev').disabled = offset <= 0;
+      document.getElementById('pg-next').disabled = offset + limit >= total;
+      const stamp = document.getElementById('last-update');
+      if (stamp) stamp.textContent = '✓ Updated ' + new Date().toLocaleTimeString();
+    })
+    .catch(err => {
+      fillTable('tbody-hist', null, 13, 'Query failed: ' + err.message);
+      showToast('History query failed: ' + err.message, 'danger');
+    });
+}
+
+function page(dir) { runQuery(offset + dir * limit); }
+
+function clearForm() {
+  for (const id of ['h-area', 'h-path', 'h-tier', 'h-since', 'h-until', 'h-scan']) document.getElementById(id).value = '';
+  Array.from(document.getElementById('h-types').options).forEach(o => { o.selected = false; });
+  document.getElementById('h-order').value = 'desc';
+  runQuery(0);
+}
+
+apiFetch('/api/v1/history/types')
+  .then(d => {
+    const sel = document.getElementById('h-types');
+    const pre = (sel.getAttribute('data-selected') || '').split(',').filter(Boolean);
+    sel.innerHTML = (d.types || []).map(t => '<option value="' + escHtml(t) + '"' + (pre.includes(t) ? ' selected' : '') + '>' + escHtml(t) + '</option>').join('');
+    sel.size = Math.min(6, Math.max(3, (d.types || []).length));
+  })
+  .catch(() => { document.getElementById('h-types').innerHTML = ''; })
+  .finally(() => runQuery(0));
+
+document.getElementById('hist-form').addEventListener('change', updateCsvLink);
+</script>
+{% endblock %}

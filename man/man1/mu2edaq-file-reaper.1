@@ -1,0 +1,289 @@
+.TH MU2EDAQ-FILE-REAPER 1 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.SH NAME
+mu2edaq-file-reaper \- policy-driven disk cleanup daemon for the Mu2e DAQ
+.SH SYNOPSIS
+.B mu2edaq-file-reaper
+[\fB\-c\fR \fIFILE\fR] [\fB\-\-env\-file\fR \fIFILE\fR] [\fB\-\-label\fR \fINAME\fR]
+[\fB\-\-host\fR \fIADDR\fR] [\fB\-p\fR \fIPORT\fR] [\fB\-\-api\-port\fR \fIPORT\fR]
+[\fB\-\-scan\-interval\fR \fISECONDS\fR] [\fB\-\-dry\-run\fR] [\fB\-\-database\-url\fR \fIURL\fR]
+[\fB\-\-admin\-token\fR \fITOKEN\fR] [\fB\-\-workers\fR \fIN\fR] [\fB\-\-no\-discovery\fR]
+[\fB\-d\fR] [\fB\-\-pid\-file\fR \fIFILE\fR] [\fB\-\-log\-file\fR \fIFILE\fR] [\fB\-v\fR]
+.br
+.B mu2edaq-file-reaper
+\fB\-\-check\-config\fR [\fB\-c\fR \fIFILE\fR]
+.br
+.B mu2edaq-file-reaper
+\fB\-\-version\fR | \fB\-\-help\fR
+.PP
+Equivalent invocations:
+.BR "python file_reaper.py" ,
+.BR "python \-m mu2edaq_file_reaper" .
+.SH DESCRIPTION
+.B mu2edaq-file-reaper
+runs on a Mu2e DAQ node and keeps the configured disk
+.I areas
+from filling up.  Every
+.I scan_interval
+seconds it measures the used fraction of each area's filesystem the way
+.BR df (1)
+does, compares it with the area's
+.BR warning ", " critical " and " full
+tiers, alarms the DAQ when a tier is reached, builds an ordered queue of
+eligible files under the tier's policy, and compresses or deletes those files
+until the tier's low-water mark is reached.  Every decision and action is
+written to an audit history.
+.PP
+A web UI (default port 5004) shows areas, queues, history, exclusions,
+notifications and API tokens; a REST API under
+.B /api/v1
+exposes the same functions with bearer tokens; the
+.BR mu2edaq-reaper (1)
+command line tool talks to that API.  Each instance advertises itself
+through
+.B mu2edaq-discovery
+with its
+.I label
+so a cluster of reapers can be found from the control room.
+.PP
+The daemon never exits because of a bad configuration: problems are reported
+on the
+.B /config
+page and in the log, offending areas are dropped, and everything else keeps
+running.  It never acts on an area whose usage it cannot measure.
+.SH OPTIONS
+Every option except
+.B \-\-config
+defaults to "not given", so the corresponding value from the environment or
+the configuration file applies.
+.TP
+.BR \-c ", " \-\-config " " \fIFILE\fR
+YAML configuration file.  Default
+.IR config/mu2edaq-file-reaper.yaml ,
+or
+.BR $MU2EDAQ_FILE_REAPER_CONFIG .
+A file named explicitly must exist; the default may be absent.
+.TP
+.BI \-\-env\-file " FILE"
+dotenv file read below the real environment.  Default: a
+.I .env
+next to the configuration file, then
+.I ./.env
+if present.
+.TP
+.BI \-\-label " NAME"
+Instance label used in discovery and notifications (default: short hostname).
+.TP
+.BI \-\-host " ADDR"
+Bind address for the web server (default 0.0.0.0).
+.TP
+.BR \-p ", " \-\-port " " \fIPORT\fR
+Web UI and API port (default 5004).
+.TP
+.BI \-\-api\-port " PORT"
+Serve
+.B /api/*
+on a second listener as well.
+.TP
+.BI \-\-scan\-interval " SECONDS"
+Seconds between scans (default 600).
+.TP
+.B \-\-dry\-run
+Plan, publish queues and write history, but never modify the filesystem.
+Disk usage is simulated from the planned actions so the report shows exactly
+which files a live run would have consumed.
+.TP
+.BI \-\-database\-url " URL"
+SQLAlchemy URL (default
+.IR sqlite:///./data/file-reaper.db ;
+PostgreSQL via
+.IR postgresql+psycopg://user:pw@host/db ).
+.TP
+.BI \-\-admin\-token " TOKEN"
+Secret that unlocks the mutating pages of the web UI and lets
+.BR mu2edaq-reaper (1)
+mint the first API token.  Prefer the environment or the .env file over the
+command line.  When empty a one-time bootstrap token is logged at start.
+.TP
+.BI \-\-workers " N"
+Areas scanned concurrently (default 4).  Areas on the same filesystem still
+take turns.
+.TP
+.B \-\-no\-discovery
+Do not advertise through mu2edaq-discovery.
+.TP
+.BR \-d ", " \-\-daemon
+Detach with the double-fork idiom (POSIX only).  The start script sets this.
+.TP
+.BI \-\-pid\-file " FILE"
+Write the daemon PID here.
+.TP
+.BI \-\-log\-file " FILE"
+Rotating log file (size and count from the configuration).
+.TP
+.BR \-v ", " \-\-verbose
+Debug logging.
+.TP
+.B \-\-check\-config
+Load and validate the configuration, print every area and issue, and exit
+with status 1 when an area was dropped.
+.TP
+.B \-\-version
+Print the version and exit.
+.SH CONFIGURATION PRECEDENCE
+.PP
+.RS
+command line  >  environment  >  .env file  >  configuration file  >  built-in defaults
+.RE
+.PP
+A value given at a higher layer replaces the same value from a lower layer;
+absent values leave the lower layer in place.  The configuration file format
+is described in
+.BR mu2edaq-file-reaper.conf (5).
+.SH ENVIRONMENT
+All variables carry the prefix
+.BR MU2EDAQ_FILE_REAPER_ .
+.TP
+.B CONFIG
+Configuration file path.
+.TP
+.B ENV_FILE
+dotenv file path.
+.TP
+.BR LABEL ", " WEB_HOST ", " WEB_PORT ", " API_PORT ", " SCAN_INTERVAL
+As the options of the same name.
+.TP
+.BR DRY_RUN ", " DAEMON ", " VERBOSE ", " OPEN_READ ", " DISCOVERY
+Booleans: 1/true/yes/on or 0/false/no/off.  An unparseable value is warned
+about and ignored.
+.TP
+.BR PID_FILE ", " LOG_FILE ", " ADMIN_TOKEN ", " WORKERS ", " DATABASE_URL
+As the options of the same name.
+.TP
+.B SECRET_KEY
+Flask session signing key.  Random per process when unset, which logs every
+admin session out at restart.
+.TP
+.BR CRS_PORT_HTTP ", " CRS_STOP_TIMEOUT
+Read by the start and stop scripts, not by the daemon.
+.SH TIERS AND WATER MARKS
+Thresholds are percent of capacity
+.BR used .
+For a tier with threshold T, high_water h and low_water l:
+.PP
+.RS
+trigger = min(T + h, 100)
+.br
+stop    = max(T \- l, 0)
+.RE
+.PP
+The tier becomes active when used >= trigger and stays active, acting on
+every scan, until used <= stop.  Within one scan only the most severe active
+tier acts; when its queue runs out or its stop point is reached the next
+lower active tier gets a pass, up to
+.I max_passes_per_scan
+passes.  A tier whose queue empties while used space is still above T raises a
+.B policy_insufficient
+alarm.
+.SH POLICIES
+.TP
+.B LRU-Delete
+Order by the more recent of atime and mtime, oldest first; delete.
+.TP
+.B Age-Delete
+Order by mtime, oldest first; delete.
+.TP
+.B LRU-Compress
+As LRU-Delete, but compress in place (X becomes X.gz) keeping atime, mtime,
+mode and owner.  Compressed files stay eligible for later delete tiers.
+.TP
+.B Age-Compress
+As Age-Delete, but compress.
+.PP
+Each tier's
+.I min_age
+applies to its policy's ordering key.
+.SH SAFETY
+The reaper refuses to manage system roots or any directory less than two
+levels deep (unless
+.I allow_shallow_root
+is set), never follows symlinks, never crosses a filesystem boundary, skips
+hard-linked files, files modified within
+.I settle_seconds
+and files whose mu2edaq-fts status is not COMPLETED or DELETED when an
+.I fts_db
+gate is configured (an unreadable FTS database makes nothing eligible).
+Every action re-opens the parent directory and the file by descriptor and
+verifies device, inode, size, mtime and link count against the scan before
+acting; any difference is a skip.  Compression writes to a temporary file in
+the same directory, verifies it, renames it into place and only then removes
+the original.  The reaper's own database and the FTS database are always
+protected.
+.SH SIGNALS
+.B SIGTERM
+and
+.B SIGINT
+stop the daemon gracefully: in-flight actions finish at the next file or
+1 MiB chunk, queued notifications are flushed, and the PID file is removed.
+A second signal exits immediately.
+.SH FILES
+.TP
+.I config/mu2edaq-file-reaper.yaml
+Reference configuration, heavily commented.
+.TP
+.I config/mu2e-file-reaper-dl-01.yaml
+Host configuration for the mu2e-dl-01 data logger.
+.TP
+.I config/.env.example
+Template for the secrets file.
+.TP
+.I data/file-reaper.db
+Default SQLite database (history, tokens, exclusions, area state,
+notification log).
+.TP
+.I logs/mu2edaq-file-reaper.log
+Rotating log.
+.TP
+.I ./file-reaper.pid
+PID file written by the start script.
+.SH EXIT STATUS
+0 on a clean shutdown; 1 when daemonising fails, when
+.B \-\-check\-config
+reports a dropped area, or when an explicitly named configuration file is
+missing.
+.SH EXAMPLES
+Validate a host configuration:
+.PP
+.RS
+.nf
+mu2edaq-file-reaper -c config/mu2e-file-reaper-dl-01.yaml --check-config
+.fi
+.RE
+.PP
+Run in the foreground in dry-run mode on another port:
+.PP
+.RS
+.nf
+MU2EDAQ_FILE_REAPER_ADMIN_TOKEN=secret \\
+  python file_reaper.py -c config/mu2edaq-file-reaper.yaml -p 5010 --dry-run -v
+.fi
+.RE
+.PP
+Start and stop as the control room does:
+.PP
+.RS
+.nf
+./start-mu2edaq-file-reaper.sh -c config/mu2e-file-reaper-dl-01.yaml
+./stop-mu2edaq-file-reaper.sh
+.fi
+.RE
+.SH SEE ALSO
+.BR mu2edaq-reaper (1),
+.BR mu2edaq-file-reaper.conf (5),
+.BR mu2edaq-file-reaper-api (7),
+.BR mu2edaq_file_reaper (3),
+.BR mu2edaq-file-reaper-start (1),
+.BR mu2edaq-file-reaper-stop (1),
+.BR mu2edaq-file-reaper-bootstrap (1),
+.BR mu2edaq-diskwatcher (1)
+.SH AUTHORS
+Mu2e DAQ group, Fermilab.

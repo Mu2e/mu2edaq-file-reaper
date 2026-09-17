@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+  {{ m.stat_card('n', 'channels', 'CHANNELS', 'total') }}
+  {{ m.stat_card('n', 'enabled',  'ENABLED',  'good') }}
+  {{ m.stat_card('n', 'sent',     'SENT',     'compress', 'Since the daemon started') }}
+  {{ m.stat_card('n', 'failed',   'FAILED',   'critical', 'Since the daemon started') }}
+</div>
+
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-bell"></i> Channels</span>
+    {{ m.refresh_controls() }}
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0 align-middle">
+        <thead class="table-light">
+          <tr><th class="ps-3">Channel</th><th>Enabled</th><th>Min severity</th><th>Disabled reason</th><th>Last sent</th>{% if is_admin %}<th></th>{% endif %}</tr>
+        </thead>
+        <tbody id="tbody-channels"><tr><td colspan="6" class="text-muted p-3">Loading&hellip;</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer text-muted small">
+    Channels are configured under <code>notifications:</code> in the YAML. A channel that is configured but cannot
+    start (missing library, no recipients) is listed as disabled with the reason.
+    {{ m.admin_hint('Sending a test notification') }}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-journal-text"></i> Recent notification log <small class="text-muted ms-1" id="log-count"></small></div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr><th class="ps-3">Time</th><th>Channel</th><th>Severity</th><th>Area</th><th>Title</th><th>Outcome</th><th>Error</th></tr>
+        </thead>
+        <tbody id="tbody-log"><tr><td colspan="7" class="text-muted p-3">Loading&hellip;</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer text-muted small">
+    Outcomes: <code>sent</code>, <code>failed</code>, <code>suppressed_dup</code> (same event key within the
+    dedup window), <code>suppressed_rate</code> (rate limit), <code>disabled</code>. Click a row for the body.
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const COLSPAN = {{ 6 if is_admin else 5 }};
+let lastLog = [];
+
+function sendTest(name) {
+  reasonModal('Send test notification via ' + name, function () {
+    postJSON('/api/v1/notifications/test', {channel: name})
+      .then(d => {
+        const o = d.outcomes || {};
+        const res = o[name] || d.outcome || JSON.stringify(o);
+        showToast('Test via ' + name + ': ' + res, String(res).startsWith('failed') ? 'danger' : 'success');
+        refreshData();
+      })
+      .catch(err => showToast('Test failed: ' + err.message, 'danger'));
+  }, {hideReason: true, okLabel: 'Send', body: '<p class="small mb-0">An <em>info</em> severity test event is delivered to this channel only.</p>'});
+}
+
+function channelRows(channels) {
+  if (!channels.length) return null;
+  let html = '';
+  for (const c of channels) {
+    html += '<tr>';
+    html += '<td class="ps-3"><strong>' + escHtml(c.name) + '</strong></td>';
+    html += '<td>' + (c.enabled ? '<span class="badge bg-success">enabled</span>' : '<span class="badge bg-secondary">disabled</span>') + '</td>';
+    html += '<td>' + badge(c.min_severity || 'info') + '</td>';
+    html += '<td class="small text-danger">' + escHtml(c.disabled_reason || '') + '</td>';
+    html += '<td class="small text-nowrap">' + (c.last_sent ? fmtTs(c.last_sent) + ' <span class="text-muted">(' + fmtAgo(c.last_sent) + ')</span>' : '<span class="text-muted">never</span>') + '</td>';
+    if (IS_ADMIN) {
+      html += '<td class="text-end pe-2"><button class="btn btn-sm btn-outline-primary py-0" onclick="sendTest(' + escHtml(JSON.stringify(c.name)) + ')"' +
+        (c.enabled ? '' : ' disabled') + '><i class="bi bi-send"></i> Send test</button></td>';
+    }
+    html += '</tr>';
+  }
+  return html;
+}
+
+function showLog(i) {
+  const n = lastLog[i];
+  if (!n) return;
+  showDetail('Notification #' + n.id, kvTable(n, ['ts', 'channel', 'severity', 'area', 'event_key', 'title', 'outcome', 'error']) +
+    '<h6 class="mt-3">Body</h6><pre class="json-pre">' + escHtml(n.body || '') + '</pre>' +
+    (n.detail && Object.keys(n.detail).length ? '<h6 class="mt-3">Detail</h6>' + jsonPre(n.detail) : ''));
+}
+
+function logRows(rows) {
+  if (!rows.length) return null;
+  let html = '';
+  rows.forEach((n, i) => {
+    html += '<tr class="clickable" onclick="showLog(' + i + ')">';
+    html += '<td class="ps-3 small text-nowrap" title="' + escHtml(n.ts) + '">' + fmtTs(n.ts) + '</td>';
+    html += '<td>' + escHtml(n.channel) + '</td>';
+    html += '<td>' + badge(n.severity) + '</td>';
+    html += '<td class="small">' + (n.area ? '<a href="/areas/' + encodeURIComponent(n.area) + '" onclick="event.stopPropagation()">' + escHtml(n.area) + '</a>' : '') + '</td>';
+    html += '<td class="small">' + escHtml(n.title) + '</td>';
+    html += '<td>' + badge(n.outcome) + '</td>';
+    html += '<td class="small text-danger">' + escHtml(n.error || '') + '</td>';
+    html += '</tr>';
+  });
+  return html;
+}
+
+function renderNotifications(data) {
+  const channels = data.channels || [];
+  renderStatCards('n', {channels: channels.length, enabled: channels.filter(c => c.enabled).length,
+    sent: data.sent || 0, failed: data.failed || 0});
+  fillTable('tbody-channels', channelRows(channels), COLSPAN, 'No notification channels configured.');
+  lastLog = data.recent || [];
+  document.getElementById('log-count').textContent = '(' + lastLog.length + ')';
+  fillTable('tbody-log', logRows(lastLog), 7, 'Nothing has been sent yet.');
+}
+
+startDashboard('/api/v1/notifications?limit=100', renderNotifications, 30000);
+</script>
+{% endblock %}

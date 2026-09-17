@@ -1,0 +1,318 @@
+.TH MU2EDAQ-FILE-REAPER.CONF 5 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.SH NAME
+mu2edaq-file-reaper.conf \- YAML configuration of the Mu2e DAQ file reaper
+.SH SYNOPSIS
+.I config/mu2edaq-file-reaper.yaml
+.SH DESCRIPTION
+The configuration is a YAML mapping with the top-level keys
+.BR reaper ", " database ", " discovery ", " api ", " defaults ", " areas " and " notifications .
+Every scalar under
+.BR reaper ", " database ", " discovery " and " api
+may be overridden by an environment variable and by a command-line flag:
+.PP
+.RS
+command line  >  environment (MU2EDAQ_FILE_REAPER_*)  >  .env  >  this file  >  defaults
+.RE
+.PP
+Loading never aborts on a bad value: the problem is listed on the
+.B /config
+page and in
+.BR "/api/v1/config" ,
+the offending tier or area is dropped, and the rest applies.  Unknown keys are
+reported.
+.SH UNITS
+.TP
+Percentages
+.BR 80 ", " "\[dq]80\[dq]" " or " "\[dq]80%\[dq]" .
+Thresholds are percent of capacity
+.B used
+computed as
+.IR "100 * used / (used + free)" ,
+the
+.BR df (1)
+convention.
+.TP
+Durations
+.BR "\[dq]90s\[dq] \[dq]10m\[dq] \[dq]6h\[dq] \[dq]7d\[dq] \[dq]2w\[dq]"
+or bare seconds.
+.TP
+Sizes
+SI (\[dq]500 GB\[dq]) or IEC (\[dq]500 GiB\[dq]) units, or bare bytes
+(reserved for future use; the reaper's thresholds are percentages).
+.SH THE reaper SECTION
+.TP
+.B label
+Instance label (default: short hostname).  Appears in discovery, notification
+titles and the UI.
+.TP
+.BR web_host " (0.0.0.0), " web_port " (5004)"
+Web UI and API listener.
+.TP
+.B api_port
+Optional second listener serving only
+.BR /api/* .
+.TP
+.B scan_interval
+Seconds between scans (default 600).
+.TP
+.B dry_run
+When true nothing is modified; queues, history and notifications behave as in
+a live run and disk usage is simulated from the planned actions.
+.TP
+.BR daemon ", " pid_file ", " log_file ", " log_max_bytes " (10485760), " log_backup_count " (5)"
+Process and logging.  The start script always passes
+.BR \-\-daemon .
+.TP
+.B admin_token
+Secret unlocking the mutating pages of the UI and the
+.B X-Admin-Token
+header of the API.  Empty: a one-time bootstrap token is logged at startup.
+Put it in the environment or the .env file rather than here.
+.TP
+.B workers
+Concurrent area scans (default 4).  Areas on one filesystem never act at the
+same time regardless.
+.TP
+.B max_passes_per_scan
+Passes per scan (default 3).  Each pass re-measures and re-enumerates; the
+most severe active tier acts first and lower tiers follow when it stops.
+.TP
+.B remeasure_every
+Re-read disk usage after every N actions (default 1).
+.TP
+.B stall_window
+Actions between checks that used space really dropped (default 20).  When
+less than a quarter of the expected drop is observed the pass stops with a
+.B space_not_reclaimed
+alarm (files are probably held open elsewhere).
+.TP
+.B shutdown_grace_s
+Seconds to wait for in-flight actions on SIGTERM (default 30).
+.TP
+.B queue_publish_limit
+Queue entries exposed per area in the UI and API (default 1000).
+.TP
+.B history_log_queue_adds
+.BR all ", " new_only " (default) or " none :
+how many
+.B queue_add
+history rows a scan writes.
+.TP
+.B compress_verify
+.BR crc " (default), " size " or " none :
+verification of every compressed file before the original is removed.
+.TP
+.B compress_min_ratio
+Skip (and remember) files whose compressed size is not below this fraction of
+the original (default 0.95).
+.TP
+.B compress_assumed_ratio
+Compressed/original ratio assumed in dry runs (default 0.5).
+.TP
+.B protected_paths
+Absolute paths that must never be touched, in addition to the FTS database
+and the reaper's own database.
+.TP
+.B allow_shallow_root
+Allow an area directly under
+.I /
+such as
+.IR /scratch .
+System directories are refused regardless.
+.TP
+.B fake_usage_file
+Test hook: a JSON file mapping an area realpath to
+.IR "[total, used, free]" ,
+re-read on every measurement.  Never set in production; the daemon warns
+whenever it is active.
+.SH THE database SECTION
+.TP
+.B url
+SQLAlchemy URL.  Default
+.IR sqlite:///./data/file-reaper.db
+(WAL mode, busy timeout 5 s).  PostgreSQL:
+.IR postgresql+psycopg://user:password@host/dbname
+with the
+.B psycopg
+package installed.
+.TP
+.B history_retention_days
+History and notification-log rows older than this are pruned once a day
+(default 365; 0 keeps everything).
+.SH THE discovery SECTION
+.TP
+.BR enabled " (true), " app " (file-reaper), " name " (default \[dq]File Reaper (<label>)\[dq])"
+mu2edaq-discovery record.  The label, API port and area count are published
+in
+.IR meta .
+.SH THE api SECTION
+.TP
+.B open_read
+When true (default) GET endpoints need no token.  Mutating endpoints always
+need a bearer token or an admin session.
+.SH THE defaults AND areas SECTIONS
+Every key below may appear under
+.B defaults
+(inherited by every area) and under an individual area (overriding the
+default).
+.TP
+.B path
+Area directory (areas only, required).  Local paths only.
+.TP
+.B name
+Identifier used in URLs, the API and the CLI (default: the path with slashes
+replaced by dashes, e.g.
+.IR data-raw ).
+.TP
+.B label
+Human name shown in the UI.
+.TP
+.B enabled
+false configures the area but never scans it until an operator enables it.
+.TP
+.B thresholds
+Mapping of
+.BR warning ", " critical ", " full
+to percent used (defaults 80, 90, 95).
+.TP
+.B tiers
+Mapping of tier name to a block with:
+.RS
+.TP
+.B policy
+.BR LRU-Delete ", " Age-Delete ", " LRU-Compress " or " Age-Compress
+(defaults: warning LRU-Compress, critical LRU-Delete, full Age-Delete).
+.TP
+.B min_age
+Minimum age on the policy's ordering key (defaults 7d, 3d, 1d).
+.TP
+.BR low_water " (10), " high_water " (0)"
+Percent below and above the threshold giving the stop and trigger points:
+trigger = min(threshold + high_water, 100), stop = max(threshold \- low_water, 0).
+.TP
+.B threshold
+Overrides the value from
+.BR thresholds .
+.TP
+.B compressor
+Overrides the area's algorithm for this tier.
+.RE
+.IP
+Setting a tier to
+.B null
+disables it.  An area with no tiers is monitor-only.
+.TP
+.BR include " ([\[dq]*\[dq]]), " exclude
+Globs matched against the area-relative path and the basename.  The default
+exclude list covers temporary and database files.  Exclude wins.
+.TP
+.B settle_seconds
+Files modified more recently than this are never touched (default 300).
+.TP
+.B fts_db
+Path to a mu2edaq-fts SQLite database.  When set, only files whose FTS status
+is COMPLETED or DELETED (or the reaper-compressed copy of such a file) are
+eligible.  An unreadable database makes nothing eligible and raises an alarm.
+.TP
+.B compression
+Block with
+.BR algorithm " (gzip, bz2, xz, zstd), " level " (6) and " skip_suffixes
+(files already carrying one of these suffixes are never compressed).
+.TP
+.B prune_empty_dirs
+Remove directories left empty by deletions, never the area root (default
+false).
+.TP
+.B max_actions_per_scan
+Hard cap per scan (0 = unlimited).
+.TP
+.B check_open_files
+Reject files another process has open, using a
+.I /proc
+scan (Linux; expensive; default false).
+.TP
+.B allow_hardlinks
+Act on files with more than one link (default false; deleting one link frees
+nothing).
+.SH THE notifications SECTION
+.TP
+.B rate_limit_seconds
+Identical (channel, area, title) events are suppressed within this window
+unless the severity increased (default 600).  A failed send is retried on the
+next event.
+.TP
+.B max_per_hour
+Cap on sends per rolling hour (0 = unlimited).
+.PP
+Each channel has
+.BR enabled " and " min_severity
+(debug < info < warning < error < critical).  Tier activation maps
+warning to warning, critical to error and full to critical; a policy that
+cannot clear its tier is error (critical for the full tier); recoveries are
+info.
+.TP
+.B mu2e_notify
+.BR source ", " category ", " url ", " token .
+The phone notification server is found via discovery when
+.B url
+is null.  Needs the
+.B mu2edaq-notify
+package.
+.TP
+.B daq_messages
+.BR host ", " port " (5555), " subsystem ", " event_category .
+ZMQ PUSH to the DAQ message dashboard; needs
+.BR pyzmq .
+.TP
+.B bigredbox
+.BR port " (37020), " system_id ", " ip .
+UDP broadcast to the control-room Big Red Box; default min_severity critical.
+.TP
+.B email
+.BR method " (smtp | mail), " smtp_host ", " smtp_port ", " starttls ", " username ", " password ", " from ", " to .
+.TP
+.B slack
+.BR webhook_url .
+.SH EXAMPLE
+.nf
+reaper:
+  label: dl-01
+  web_port: 5004
+  scan_interval: 600
+  dry_run: true
+database:
+  url: "sqlite:///./data/file-reaper-dl-01.db"
+defaults:
+  settle_seconds: 600
+areas:
+  - path: /data/raw
+    label: "Raw data"
+    fts_db: /home/mu2edaq/mu2edaq-main/mu2edaq-fts/fts_status.db
+    thresholds: {warning: 75, critical: 85, full: 92}
+    tiers:
+      warning:  {policy: LRU-Compress, min_age: "14d"}
+      critical: {policy: LRU-Delete,   min_age: "7d"}
+      full:     {policy: Age-Delete,   min_age: "2d", low_water: 12}
+  - path: /daqlogs
+    include: ["*.log", "*.log.*"]
+    tiers:
+      warning:  {policy: Age-Compress, min_age: "2d"}
+      critical: {policy: Age-Delete,   min_age: "30d"}
+      full:     {policy: Age-Delete,   min_age: "7d", low_water: 15}
+    prune_empty_dirs: true
+notifications:
+  mu2e_notify:  {enabled: true, min_severity: warning, source: file-reaper, category: DAQ}
+  daq_messages: {enabled: true, min_severity: warning, host: mu2e-mgr-01.fnal.gov, port: 5555}
+.fi
+.SH FILES
+.TP
+.I config/mu2edaq-file-reaper.yaml
+Reference configuration with every key commented.
+.TP
+.I config/.env.example
+Secrets template (
+.BR MU2EDAQ_FILE_REAPER_ADMIN_TOKEN ", " MU2EDAQ_NOTIFY_TOKEN ).
+.SH SEE ALSO
+.BR mu2edaq-file-reaper (1),
+.BR mu2edaq-reaper (1),
+.BR mu2edaq-file-reaper-api (7)

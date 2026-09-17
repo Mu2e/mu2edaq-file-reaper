@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-4">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-person-lock"></i> Admin sign in</div>
+      <div class="card-body">
+        {% if is_admin %}
+        <div class="alert alert-success small mb-3">
+          <i class="bi bi-check-circle"></i> You already have an admin session.
+        </div>
+        {% endif %}
+        {% if error %}
+        <div class="alert alert-danger small mb-3"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div>
+        {% endif %}
+        {% if not configured %}
+        <div class="alert alert-warning small mb-3">
+          No <code>reaper.admin_token</code> is configured, so no admin session can be opened.
+          Set it in the YAML config or via <code>MU2EDAQ_FILE_REAPER_ADMIN_TOKEN</code>.
+        </div>
+        {% endif %}
+        <form method="post" action="{{ url_for('views.login') }}">
+          <input type="hidden" name="next" value="{{ next }}">
+          <div class="mb-3">
+            <label for="token" class="form-label">Admin token</label>
+            <input type="password" class="form-control" id="token" name="token" autocomplete="current-password"
+                   autofocus {% if not configured %}disabled{% endif %}>
+          </div>
+          <button type="submit" class="btn btn-primary w-100" {% if not configured %}disabled{% endif %}>
+            <i class="bi bi-box-arrow-in-right"></i> Sign in
+          </button>
+        </form>
+      </div>
+      <div class="card-footer text-muted small">
+        An admin session unlocks the pause / resume / disable / enable / rescan / exclude
+        buttons and the Tokens page. API clients use bearer tokens instead &mdash; see the
+        <a href="{{ url_for('views.api_docs') }}">API page</a>.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

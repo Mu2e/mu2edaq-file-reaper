@@ -1,0 +1,214 @@
+.TH MU2EDAQ_FILE_REAPER 3 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.SH NAME
+mu2edaq_file_reaper \- Python API of the Mu2e DAQ file reaper
+.SH SYNOPSIS
+.nf
+from mu2edaq_file_reaper.watermarks import resolve_marks, evaluate_tiers, highest_active
+from mu2edaq_file_reaper.eligibility import EligibilityContext, classify, partition
+from mu2edaq_file_reaper.policies import POLICIES, build_queue
+from mu2edaq_file_reaper.reaper import Deps, AreaRuntime, scan_area
+from mu2edaq_file_reaper.scheduler import Scheduler
+from mu2edaq_file_reaper.db import init_db
+from mu2edaq_file_reaper.db.repo import HistoryRepo, TokenRepo, ExclusionRepo, AreaStateRepo
+from mu2edaq_file_reaper.notify import build_notifier
+from mu2edaq_reaper_cli.client import ReaperClient
+.fi
+.SH DESCRIPTION
+The package is split into pure decision modules, which take every input as
+an argument and touch neither the filesystem nor the clock, and I/O modules
+that are injected into the orchestrator through a
+.B Deps
+object.  Anything that embeds or extends the reaper should build on the same
+seams the tests use.
+.SH PURE MODULES
+.SS mu2edaq_file_reaper.units
+.TP
+.BI parse_size( value ") -> int"
+.TP
+.BI parse_percent( value ", lo=0, hi=100, inclusive_lo=False) -> float"
+.TP
+.BI parse_duration( value ") -> int"
+Raise
+.B UnitError
+on anything they cannot understand.
+.SS mu2edaq_file_reaper.watermarks
+.TP
+.BI used_percent( total ", " used ", " free ") -> Optional[float]"
+df convention; None when unmeasurable.
+.TP
+.BI resolve_marks( tier ") -> Marks"
+trigger/stop points, clamped, with the clamps recorded.
+.TP
+.BI tier_is_active( used_pct ", " marks ", " was_active ") -> bool"
+.TP
+.BI evaluate_tiers( used_pct ", " tiers ", " previously_active ") -> FrozenSet[str]"
+.TP
+.BI highest_active( active ", exclude=frozenset()) -> Optional[str]"
+By name order full > critical > warning.
+.TP
+.BI transitions( before ", " after ") -> (activated, deactivated)"
+.TP
+.BI should_continue( used_pct ", " marks ") -> bool"
+.TP
+.BI policy_insufficient( used_pct ", " tier ") -> bool"
+.TP
+.BI bytes_to_stop( usage ", " marks ") -> int"
+.TP
+.BI simulate_after( usage ", " bytes_freed ") -> UsageSample"
+.TP
+.BI check_tier_config( tiers ") -> List[str]"
+.SS mu2edaq_file_reaper.eligibility
+.TP
+.B EligibilityContext
+Frozen dataclass: now, policy, min_age, settle_seconds, include, exclude,
+protected, manual_exclusions, fts, open_inodes, allow_hardlinks,
+compressed_suffixes, area_root, siblings.
+.TP
+.BI classify( info ", " ctx ") -> Verdict"
+Verdict.reason is one of
+.BR REJECT_REASONS .
+.TP
+.BI partition( infos ", " ctx ") -> (eligible, reject_counts)"
+.SS mu2edaq_file_reaper.policies
+.TP
+.B POLICIES
+Mapping name -> Policy(name, kind, key) for the four policies.
+.TP
+.BI ordering_key( info ", " policy ") -> float"
+.TP
+.BI build_queue( eligible ", " policy ", " tier ", owner_lookup=None) -> List[QueueEntry]"
+.SS mu2edaq_file_reaper.auth
+.TP
+.BR generate_token() ", " token_prefix(token) ", " hash_token(token) ", " verify_token(token,\ stored)
+.TP
+.BI scope_allows( granted ", " required ") -> bool"
+.TP
+.B TokenCache(ttl=300, clock=time.time)
+.SS mu2edaq_file_reaper.notify.ratelimit
+.TP
+.BI "RateLimiter(window, max_per_hour).allow(" key ", " severity ", " now ") -> (bool, reason)"
+.SH DOMAIN TYPES (mu2edaq_file_reaper.domain)
+.BR TierConfig ", " AreaConfig ", " UsageSample ", " Marks ", " FileInfo ", " Verdict ", " QueueEntry ", " ActionResult ", " PassStop ;
+all frozen dataclasses.
+.B TIER_ORDER
+= ("warning", "critical", "full").
+.SH CONFIGURATION
+.TP
+.BI "settings.get_settings()" " -> Settings"
+Process-wide singleton.  Call inside functions, never at import time.
+.TP
+.BI "config.load_config(" path ", required=False) -> dict"
+.TP
+.BI "config.build_areas(" cfg ", allow_shallow_root=False) -> (List[AreaConfig], List[str])"
+Never raises; the second value lists issues.
+.TP
+.BI "cli.load_settings(" argv ") -> (Settings, Namespace)"
+Applies every layer.
+.SH I/O MODULES
+.TP
+.BI "usage.measure_usage(" path ", disk_usage=shutil_usage, clock=time.time) -> Optional[UsageSample]"
+.TP
+.BI "usage.atime_mode(" path ") -> str"
+.TP
+.BI "scanner.enumerate_files(" area ", root_dev=None, protected=frozenset(), stats=None) -> Iterator[FileInfo]"
+.TP
+.BI "fts_gate.load_fts_snapshot(" db_path ") -> FtsSnapshot"
+Raises
+.BR FtsUnavailable .
+.TP
+.B exclusions.ExclusionRegistry(repo)
+.BR reload() ", " rules_for(area) .
+.TP
+.BI "actions.delete_file(" info ", " ctx ", " settle_seconds ", allow_hardlinks=False) -> ActionResult"
+.TP
+.BI "actions.compress_file(" info ", " ctx ", " settle_seconds ", allow_hardlinks=False) -> ActionResult"
+Both take an
+.B ActionContext
+(area_root, dry_run, compressor, level, verify, min_ratio, assumed_ratio,
+protected, clock, interrupt, shutdown) and return outcome
+.BR ok ", " dry_run ", " skipped " or " failed .
+.SH ORCHESTRATION
+.TP
+.B reaper.Deps
+Dataclass of injectable side effects: store, history, area_state,
+exclusions, notifier, measure_usage, enumerate_files, load_fts, delete,
+compress, clock, shutdown, open_inodes, atime_mode, sweep_temp, prune_dirs,
+owner_lookup, fs_locks.
+.TP
+.B reaper.AreaRuntime(area)
+Mutable per-area state: paused, disabled, active_tiers, interrupt event,
+incompressible memory, force_dry_run.
+.TP
+.BI "reaper.scan_area(" area ", " rt ", " deps ", " settings ") -> ScanReport"
+One complete scan (all passes).
+.TP
+.B scheduler.Scheduler(deps, settings, history=None)
+.BR start() ", " stop(grace_s) ", " request_scan(area,\ dry_run=False) ", " run_now(area,\ dry_run=False) ", " pause/resume/disable/enable(area,\ by,\ reason) ", " runtime(area) ", " health() .
+.TP
+.B state.StateStore
+.BR init_areas(areas) ", " replace_area(name,\ snap) ", " update_area(name,\ **changes) ", " area(name) ", " snapshot() ", " meta() .
+.B AREA_STATE_KEYS
+is the exact key set of every snapshot.
+.SH DATABASE
+.TP
+.BI "db.init_db(" url ", echo=False) -> Database"
+Creates tables; SQLite gets WAL, busy_timeout and check_same_thread=False.
+.BR Database.session_scope() ", " remove() ", " dispose() ", " ping() .
+.TP
+.B db.repo.HistoryRepo(db)
+.BR record(event_type,\ area,\ **fields) ", " record_many(rows) ", " query(...)\ ->\ (rows,\ total) ", " recent_usage(area) ", " prune_days(days) .
+.TP
+.B db.repo.ExclusionRepo(db)
+.BR add() ", " remove(id) ", " list() ", " active_rules() .
+.TP
+.B db.repo.TokenRepo(db)
+.BR create() ", " candidates(prefix) ", " touch(id,\ ip) ", " revoke(id) ", " list() .
+.TP
+.B db.repo.AreaStateRepo(db)
+.BR load() ", " all() ", " set_paused() ", " set_disabled() ", " save_active_tiers() ", " mark_scan() .
+.TP
+.B db.repo.NotificationLogRepo(db)
+.BR record() ", " recent() ", " last_sent() .
+.SH NOTIFICATIONS
+.TP
+.BI "notify.build_notifier(" cfg ", " label ", log_repo=None, history=None) -> Notifier"
+.TP
+.B notify.Notifier
+.BR start() ", " stop() ", " emit(severity,\ title,\ message,\ key,\ area,\ meta) ", " emit_sync(event) ", " describe() ", " channel(name) .
+.TP
+.B notify.channels.Channel
+Subclass and implement
+.BR send(event) ;
+register the class in
+.B CHANNEL_CLASSES
+to add a channel.
+.SH WEB
+.TP
+.BI "web.create_app(db, scheduler, deps, notifier, tokens, exclusions_repo)" " -> Flask"
+.TP
+.BI "web.serve(" app ", " settings ") -> List[ServerHandle]"
+.TP
+.BI "web.auth.require_scope(" scope ", allow_open_read=False)"
+Decorator for API views.
+.SH CLIENT (mu2edaq_reaper_cli)
+.TP
+.B client.ReaperClient(base_url, token=None, admin_token=None, timeout=10)
+One method per endpoint; raises
+.BR ReaperError(status,\ message) " or " ReaperConnectionError .
+.TP
+.B tokencache
+.BR load() ", " save(url,\ token,\ name) ", " get(url) ", " remove(url) .
+.SH EXAMPLE
+.nf
+from mu2edaq_file_reaper.domain import TierConfig
+from mu2edaq_file_reaper.watermarks import resolve_marks, tier_is_active
+
+tier = TierConfig(name="critical", threshold=90, policy="LRU-Delete", low_water=10)
+marks = resolve_marks(tier)          # Marks(trigger=90.0, stop=80.0)
+tier_is_active(85.0, marks, was_active=True)    # True: stays active until <= 80
+tier_is_active(85.0, marks, was_active=False)   # False: needs >= 90 to enter
+.fi
+.SH SEE ALSO
+.BR mu2edaq-file-reaper (1),
+.BR mu2edaq-file-reaper.conf (5),
+.BR mu2edaq-file-reaper-api (7)

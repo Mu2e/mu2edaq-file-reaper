@@ -1,0 +1,30 @@
+# Runtime state
+*.pid
+file-reaper.pid
+data/*
+!data/.gitkeep
+logs/*
+!logs/.gitkeep
+config/*.log
+config/*.pid
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+.venv/
+
+# Editors / OS
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

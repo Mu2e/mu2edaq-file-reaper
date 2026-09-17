@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mu2edaq-file-reaper"
+dynamic = ["version"]
+description = "Policy-driven disk cleanup (LRU/age delete and compress) with audit history, web UI, REST API and CLI for the Mu2e DAQ"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "Flask>=3.0",
+    "PyYAML>=6.0",
+    "SQLAlchemy>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+test = ["pytest>=7.0"]
+# Optional integrations.  None of these is required for the reaper to run;
+# the corresponding channel disables itself when the import fails.
+zmq = ["pyzmq>=25"]
+zstd = ["zstandard>=0.21"]
+postgres = ["psycopg[binary]>=3.1"]
+# Not on PyPI; installed from a sibling checkout by bootstrap.sh.
+discovery = ["mu2edaq-discovery"]
+notify = ["mu2edaq-notify"]
+
+[project.scripts]
+mu2edaq-file-reaper = "mu2edaq_file_reaper.cli:main"
+mu2edaq-reaper = "mu2edaq_reaper_cli.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "mu2edaq_file_reaper.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"mu2edaq_file_reaper.web" = ["templates/*.html", "static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

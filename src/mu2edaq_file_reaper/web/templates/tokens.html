@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block content %}
+<div id="new-token-alert" hidden class="alert alert-success">
+  <h6 class="alert-heading"><i class="bi bi-key-fill"></i> Token created &mdash; copy it now</h6>
+  <p class="small mb-2">This is the only time the plaintext is shown. The server stores a hash.</p>
+  <div class="d-flex align-items-center gap-2">
+    <div class="token-plain flex-grow-1" id="new-token-value"></div>
+    <button class="btn btn-sm btn-outline-success" onclick="copyToken()" id="copy-token-btn"><i class="bi bi-clipboard"></i> Copy</button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('new-token-alert').hidden = true"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <p class="small mb-0 mt-2 text-muted">Use it as <code>Authorization: Bearer &lt;token&gt;</code>, or
+    <code>mu2edaq-reaper login --token &lt;token&gt;</code>.</p>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-key"></i> API tokens <small class="text-muted ms-1" id="tok-count"></small></span>
+        <div class="d-flex align-items-center gap-3">
+          <div class="form-check form-switch small mb-0">
+            <input class="form-check-input" type="checkbox" id="show-revoked">
+            <label class="form-check-label" for="show-revoked">show revoked</label>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadTokens()" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr><th class="ps-3">#</th><th>Name</th><th>Prefix</th><th>Scopes</th><th>Created</th><th>Expires</th><th>Last used</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody id="tbody-tokens"><tr><td colspan="9" class="text-muted p-3">Loading&hellip;</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-footer text-muted small">
+        Scopes nest: <code>admin</code> &sup; <code>operate</code> &sup; <code>read</code>. Revocation takes
+        effect within the verification cache TTL (5 min). The prefix is the first 12 characters and identifies
+        a token in logs without revealing it.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-plus-circle"></i> Create a token</div>
+      <div class="card-body">
+        <form id="create-form" onsubmit="createToken(); return false;">
+          <div class="mb-2">
+            <label class="form-label small text-muted mb-0" for="t-name">Name <span class="text-muted">(who / what uses it)</span></label>
+            <input class="form-control form-control-sm" id="t-name" required placeholder="shifter-console">
+          </div>
+          <div class="mb-2">
+            <div class="form-label small text-muted mb-0">Scopes</div>
+            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="s-read" value="read" checked><label class="form-check-label small" for="s-read">read</label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="s-operate" value="operate"><label class="form-check-label small" for="s-operate">operate</label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="s-admin" value="admin"><label class="form-check-label small" for="s-admin">admin</label></div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted mb-0" for="t-expires">Expires in <span class="text-muted">(blank = never; e.g. 90d)</span></label>
+            <input class="form-control form-control-sm" id="t-expires" placeholder="90d">
+          </div>
+          <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-key"></i> Create token</button>
+        </form>
+      </div>
+      <div class="card-footer text-muted small">
+        <strong>read</strong>: GET endpoints. <strong>operate</strong>: pause/resume/rescan, exclusions, dry-run.
+        <strong>admin</strong>: enable/disable, tokens, notification tests.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function tokenRows(rows) {
+  if (!rows.length) return null;
+  let html = '';
+  for (const t of rows) {
+    const expired = t.expires_at && Date.parse(t.expires_at) < Date.now();
+    html += '<tr class="' + (t.active ? '' : 'text-muted') + '">';
+    html += '<td class="ps-3">' + t.id + '</td>';
+    html += '<td><strong>' + escHtml(t.name) + '</strong><br><span class="small text-muted">by ' + escHtml(t.created_by || '') + '</span></td>';
+    html += '<td><code>' + escHtml(t.prefix) + '&hellip;</code></td>';
+    html += '<td>' + (t.scopes || []).map(s => '<span class="badge bg-' + ({read: 'secondary', operate: 'primary', admin: 'danger'}[s] || 'dark') + ' me-1">' + escHtml(s) + '</span>').join('') + '</td>';
+    html += '<td class="small text-nowrap">' + fmtTs(t.created_at) + '</td>';
+    html += '<td class="small text-nowrap">' + (t.expires_at ? fmtTs(t.expires_at) + (expired ? ' <span class="badge bg-secondary">expired</span>' : '') : 'never') + '</td>';
+    html += '<td class="small text-nowrap">' + (t.last_used_at ? fmtAgo(t.last_used_at) + (t.last_used_ip ? '<br><span class="text-muted">' + escHtml(t.last_used_ip) + '</span>' : '') : '<span class="text-muted">never</span>') + '</td>';
+    html += '<td>' + (t.revoked_at ? '<span class="badge bg-dark" title="' + escHtml(t.revoked_at) + '">revoked</span>'
+      : (t.active ? '<span class="badge bg-success">active</span>' : '<span class="badge bg-secondary">expired</span>')) + '</td>';
+    html += '<td class="text-end pe-2">' + (t.revoked_at ? '' :
+      '<button class="btn btn-sm btn-outline-danger py-0" title="Revoke" onclick="revokeToken(' + t.id + ',' + escHtml(JSON.stringify(t.name)) + ')"><i class="bi bi-x-lg"></i></button>') + '</td>';
+    html += '</tr>';
+  }
+  return html;
+}
+
+function loadTokens() {
+  const all = document.getElementById('show-revoked').checked;
+  apiFetch('/api/v1/tokens' + (all ? '?all=1' : ''))
+    .then(d => {
+      const rows = d.tokens || [];
+      document.getElementById('tok-count').textContent = '(' + rows.length + ')';
+      fillTable('tbody-tokens', tokenRows(rows), 9, 'No API tokens. Create one on the right, or bootstrap with X-Admin-Token.');
+    })
+    .catch(err => fillTable('tbody-tokens', null, 9, 'Could not load tokens: ' + err.message));
+}
+
+function createToken() {
+  const scopes = ['read', 'operate', 'admin'].filter(s => document.getElementById('s-' + s).checked);
+  const body = {name: document.getElementById('t-name').value.trim(), scopes: scopes.length ? scopes : ['read'],
+                expires_in: document.getElementById('t-expires').value.trim() || null};
+  if (!body.name) return;
+  postJSON('/api/v1/tokens', body)
+    .then(d => {
+      document.getElementById('new-token-value').textContent = d.token;
+      document.getElementById('new-token-alert').hidden = false;
+      document.getElementById('copy-token-btn').innerHTML = '<i class="bi bi-clipboard"></i> Copy';
+      document.getElementById('create-form').reset();
+      showToast('Token "' + body.name + '" created', 'success');
+      loadTokens();
+      window.scrollTo({top: 0, behavior: 'smooth'});
+    })
+    .catch(err => showToast('Create failed: ' + err.message, 'danger'));
+}
+
+function copyToken() {
+  const text = document.getElementById('new-token-value').textContent;
+  const btn = document.getElementById('copy-token-btn');
+  const done = () => { btn.innerHTML = '<i class="bi bi-clipboard-check"></i> Copied'; };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => selectToken());
+  } else {
+    selectToken();
+  }
+}
+
+function selectToken() {
+  const el = document.getElementById('new-token-value');
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  window.getSelection().removeAllRanges();
+  window.getSelection().addRange(r);
+}
+
+function revokeToken(id, name) {
+  confirmModal('Revoke token "' + name + '"', '<p class="small mb-0">Clients using this token lose access within a few minutes. This cannot be undone.</p>',
+    function () {
+      del('/api/v1/tokens/' + id)
+        .then(() => { showToast('Revoked token #' + id, 'success'); loadTokens(); })
+        .catch(err => showToast('Revoke failed: ' + err.message, 'danger'));
+    }, {okLabel: 'Revoke'});
+}
+
+document.getElementById('show-revoked').addEventListener('change', loadTokens);
+loadTokens();
+</script>
+{% endblock %}

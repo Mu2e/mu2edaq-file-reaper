@@ -1,0 +1,31 @@
+.TH MU2EDAQ-FILE-REAPER-STOP 1 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.SH NAME
+stop-mu2edaq-file-reaper.sh \- stop the file reaper daemon
+.SH SYNOPSIS
+.B stop-mu2edaq-file-reaper.sh
+[\fIPIDFILE\fR]
+.SH DESCRIPTION
+Standardised Mu2e control-room stop script, run by
+.BR "crs-app stop file-reaper" .
+It sends SIGTERM to every copy of the reaper running out of the script's
+directory (found through the PID file and the process table, see
+.BR mu2edaq-file-reaper-start (1)),
+waits up to
+.B CRS_STOP_TIMEOUT
+seconds for the daemon to finish the file it is working on, then sends
+SIGKILL, and removes the PID file.  A stale PID file naming an unrelated live
+process is cleaned up without signalling that process.
+.SH OPTIONS
+.TP
+.I PIDFILE
+PID file to consult (default
+.IR ./file-reaper.pid ).
+.SH ENVIRONMENT
+.TP
+.B CRS_STOP_TIMEOUT
+Grace period in seconds before SIGKILL (default 30).
+.SH EXIT STATUS
+Always 0 unless the shell itself fails.
+.SH SEE ALSO
+.BR mu2edaq-file-reaper-start (1),
+.BR mu2edaq-file-reaper (1)

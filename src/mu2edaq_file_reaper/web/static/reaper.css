@@ -1,0 +1,125 @@
+/* mu2edaq File Reaper -- same visual family as mu2edaq Disk Watcher. */
+body { background: #f8f9fa; }
+.navbar-brand { font-weight: 700; letter-spacing: .05em; }
+
+/* ---- global banners ---------------------------------------------------- */
+.dry-run-banner {
+  background: repeating-linear-gradient(45deg, #fff3cd, #fff3cd 12px, #ffe69c 12px, #ffe69c 24px);
+  border-bottom: 2px solid #ffc107;
+  color: #664d03;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-align: center;
+  padding: .3rem 1rem;
+}
+
+/* ---- summary cards ----------------------------------------------------- */
+.stat-card { border-left: 4px solid; }
+
+.stat-card.good-card        { border-color: #198754; }
+.stat-card.warning-card     { border-color: #ffc107; }
+.stat-card.critical-card    { border-color: #dc3545; }
+.stat-card.full-card        { border-color: #842029; }
+.stat-card.paused-card      { border-color: #6c757d; }
+.stat-card.disabled-card    { border-color: #6c757d; }
+.stat-card.unavailable-card { border-color: #6f42c1; }
+.stat-card.unknown-card     { border-color: #6f42c1; }
+.stat-card.missing-card     { border-color: #212529; }
+.stat-card.compress-card    { border-color: #0dcaf0; }
+.stat-card.delete-card      { border-color: #fd7e14; }
+.stat-card.total-card       { border-color: #0d6efd; }
+
+.text-good-state        { color: #198754; }
+.text-warning-state     { color: #b58100; }
+.text-critical-state    { color: #dc3545; }
+.text-full-state        { color: #842029; }
+.text-paused-state      { color: #6c757d; }
+.text-disabled-state    { color: #6c757d; }
+.text-unavailable-state { color: #6f42c1; }
+.text-unknown-state     { color: #6f42c1; }
+.text-missing-state     { color: #212529; }
+.text-compress-state    { color: #0aa2c0; }
+.text-delete-state      { color: #fd7e14; }
+.text-total-state       { color: #0d6efd; }
+
+/* ---- status badges ----------------------------------------------------- */
+.badge-good      { background-color: #198754 !important; color: #fff !important; }
+.badge-warning   { background-color: #ffc107 !important; color: #000 !important; }
+.badge-critical  { background-color: #dc3545 !important; color: #fff !important; }
+.badge-full      { background-color: #842029 !important; color: #fff !important; }
+.badge-paused,
+.badge-disabled  { background-color: #6c757d !important; color: #fff !important; }
+.badge-unknown   { background-color: #6f42c1 !important; color: #fff !important; }
+.badge-missing   { background-color: #212529 !important; color: #fff !important; }
+
+/* queue kinds / entry statuses / outcomes */
+.badge-compress  { background-color: #0dcaf0 !important; color: #000 !important; }
+.badge-delete    { background-color: #fd7e14 !important; color: #fff !important; }
+.badge-queued    { background-color: #0d6efd !important; color: #fff !important; }
+.badge-acting,
+.badge-in_progress { background-color: #6610f2 !important; color: #fff !important; }
+.badge-done,
+.badge-ok,
+.badge-sent      { background-color: #198754 !important; color: #fff !important; }
+.badge-failed,
+.badge-error     { background-color: #dc3545 !important; color: #fff !important; }
+.badge-skipped,
+.badge-dry_run,
+.badge-suppressed_dup,
+.badge-suppressed_rate,
+.badge-below_min_severity { background-color: #adb5bd !important; color: #000 !important; }
+.badge-info      { background-color: #0dcaf0 !important; color: #000 !important; }
+
+/* progress bar extras (Bootstrap has no dark-red or purple) */
+.bg-full    { background-color: #842029 !important; }
+.bg-unknown { background-color: #6f42c1 !important; }
+
+/* ---- table rows -------------------------------------------------------- */
+tr.row-warning td  { background-color: rgba(255, 193, 7, 0.16) !important; }
+tr.row-critical td { background-color: rgba(220, 53, 69, 0.12) !important; }
+tr.row-full td     { background-color: rgba(132, 32, 41, 0.16) !important; }
+tr.row-paused td,
+tr.row-disabled td { background-color: rgba(108, 117, 125, 0.12) !important; color: #6c757d; }
+tr.row-unknown td  { background-color: rgba(111, 66, 193, 0.10) !important; }
+tr.row-missing td  { background-color: rgba(33, 37, 41, 0.12) !important; }
+tr.row-acting td   { box-shadow: inset 3px 0 0 #6610f2; }
+tr.clickable { cursor: pointer; }
+
+/* ---- tier markers ------------------------------------------------------- */
+.limit-cell { font-size: .8em; white-space: nowrap; }
+.limit-cell .lvl { display: inline-block; min-width: 4.2em; color: #6c757d; }
+.tier-line.tier-active { font-weight: 700; }
+.tier-line.tier-selected { color: #b02a37; }
+.tier-line.tier-selected .lvl { color: #b02a37; }
+
+/* ---- sparkline --------------------------------------------------------- */
+.sparkline { width: 100%; height: 110px; display: block; }
+.sparkline .spark-area  { fill: rgba(13, 110, 253, .12); }
+.sparkline .spark-line  { fill: none; stroke: #0d6efd; stroke-width: 1.5; }
+.sparkline .spark-dot   { fill: #0d6efd; }
+.sparkline .spark-axis  { stroke: #ced4da; stroke-width: 1; }
+.sparkline .spark-label { font-size: 9px; fill: #6c757d; }
+.sparkline .tier-warning  { stroke: #ffc107; stroke-width: 1; stroke-dasharray: 4 3; }
+.sparkline .tier-critical { stroke: #dc3545; stroke-width: 1; stroke-dasharray: 4 3; }
+.sparkline .tier-full     { stroke: #842029; stroke-width: 1; stroke-dasharray: 4 3; }
+.sparkline .tier-text-warning  { fill: #b58100; font-size: 9px; }
+.sparkline .tier-text-critical { fill: #dc3545; font-size: 9px; }
+.sparkline .tier-text-full     { fill: #842029; font-size: 9px; }
+
+/* ---- misc --------------------------------------------------------------- */
+.path-cell { font-family: monospace; font-size: 0.85em; word-break: break-all; }
+a.area-link { color: inherit; text-decoration: none; }
+a.area-link:hover strong, a.area-link:hover .path-cell { text-decoration: underline; }
+.sort-th   { cursor: pointer; user-select: none; white-space: nowrap; }
+.sort-th:hover { background-color: rgba(0,0,0,.04); }
+.kv-table th { width: 32%; color: #6c757d; font-weight: 500; white-space: nowrap; }
+.kv-table td { font-family: monospace; font-size: .85em; word-break: break-all; }
+.json-pre { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: .375rem;
+            padding: .75rem; font-size: .8em; max-height: 420px; overflow: auto; }
+.token-plain { font-family: monospace; font-size: 1.05em; word-break: break-all;
+               background: #fff; border: 1px dashed #198754; padding: .5rem; border-radius: .375rem; }
+.progress-cell { min-width: 170px; }
+.detail-row td { background: #fdfdfe; }
+#toast-container { z-index: 1090; }
+.event-type { font-family: monospace; font-size: .8em; }
+.badge-admin { background-color: #d63384 !important; color: #fff !important; letter-spacing: .05em; }

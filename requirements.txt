@@ -1,0 +1,12 @@
+flask>=3.0
+pyyaml>=6.0
+sqlalchemy>=2.0
+# Optional integrations -- uncomment as needed, or use pip install -e '.[zmq,zstd]'
+#   pyzmq>=25          DAQ message channel (dashboard ZMQ PUSH on port 5555)
+#   zstandard>=0.21    zstd compression algorithm
+#   psycopg[binary]    PostgreSQL backend (database.url = postgresql+psycopg://...)
+#
+# mu2edaq-discovery and mu2edaq-notify are NOT on PyPI and are deliberately not
+# listed here (naming them would make pip abort this whole file).  bootstrap.sh
+# installs both from the sibling checkouts in mu2edaq-main when present; the
+# reaper degrades gracefully (no discovery / no phone notifications) without them.

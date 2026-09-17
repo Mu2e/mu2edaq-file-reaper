@@ -1,0 +1,237 @@
+.TH MU2EDAQ-REAPER 1 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.SH NAME
+mu2edaq-reaper \- command line client for mu2edaq-file-reaper instances
+.SH SYNOPSIS
+.B mu2edaq-reaper
+[\fIglobal options\fR] \fIcommand\fR [\fIarguments\fR]
+.PP
+.B mu2edaq-reaper
+[\fB\-\-url\fR \fIURL\fR | \fB\-\-instance\fR \fILABEL\fR] [\fB\-\-token\fR \fITOKEN\fR]
+[\fB\-\-admin\-token\fR \fISECRET\fR] [\fB\-\-timeout\fR \fISECONDS\fR] [\fB\-\-json\fR]
+[\fB\-c\fR \fIFILE\fR] \fIcommand\fR ...
+.SH DESCRIPTION
+.B mu2edaq-reaper
+talks to the REST API of a running
+.BR mu2edaq-file-reaper (1)
+over HTTP.  It uses only the Python standard library, so it runs from any
+node on the DAQ network.  Output is a readable table by default and the raw
+API JSON with
+.BR \-\-json .
+.PP
+The server is found from
+.BR \-\-url ,
+else from
+.B \-\-instance
+through mu2edaq-discovery (matching the instance
+.I label
+each reaper advertises), else from the environment or configuration file,
+else
+.IR http://localhost:5004 .
+The bearer token comes from
+.BR \-\-token ,
+the environment, or the per-URL token cache filled by
+.BR "token login" .
+.SH GLOBAL OPTIONS
+.TP
+.BI \-\-url " URL"
+Reaper base URL.
+.TP
+.BI \-\-instance " LABEL"
+Find the reaper by instance label via mu2edaq-discovery.
+.TP
+.BI \-\-token " TOKEN"
+Bearer token (default: environment, then cache).
+.TP
+.BI \-\-admin\-token " SECRET"
+The server's admin secret; only needed to mint the first API token or when
+no token is available for an admin command.
+.TP
+.BI \-\-timeout " SECONDS"
+HTTP timeout (default 10).
+.TP
+.B \-\-json
+Print the raw API JSON.
+.TP
+.BR \-c ", " \-\-config " " \fIFILE\fR
+Client YAML configuration file (keys
+.IR url ", " instance ", " timeout ", " token_file ", " discovery_timeout ).
+.TP
+.BR \-V ", " \-\-version
+Print the client version.
+.SH COMMANDS
+.TP
+.B status
+Health, summary counts and one line per area.  Exit status 1 when the server
+reports itself degraded.
+.TP
+.B areas
+Table of every area.
+.TP
+.BI area " NAME"
+Details of one area: usage, tiers with trigger/stop points and bytes to the
+stop point, active tier, queue sizes, last scan, progress, rejection counts,
+warnings.
+.TP
+.BI pause " NAME" " [\-\-reason " TEXT ]
+Pause reaping of an area: scans continue and queues are published, but
+nothing is compressed or deleted.  Requires the
+.I operate
+scope.
+.TP
+.BI resume " NAME" " [\-\-reason " TEXT ]
+Resume a paused area and request a scan.
+.TP
+.BI disable " NAME" " [\-\-reason " TEXT ]
+Disable an area entirely (no scans).  Requires
+.IR admin .
+.TP
+.BI enable " NAME" " [\-\-reason " TEXT ]
+Re-enable a disabled area.  Requires
+.IR admin .
+.TP
+.BI rescan " NAME"
+Request an immediate scan.
+.TP
+.BI plan " NAME" " [\-\-limit " N ]
+Run a dry-run scan now and print the report and the top queue entries.
+Nothing is modified.
+.TP
+.BR queues " [\-\-area " \fIA\fR "] [\-\-kind compress|delete] [\-\-status " \fIS\fR "] [\-\-limit " \fIN\fR ]
+List queued entries across areas.
+.TP
+.BI "exclude add" " PATTERN" " [\-\-area " A "] [\-\-kind path|glob] [\-\-reason " TEXT "] [\-\-expires\-in " DURATION ]
+Add an exclusion (absolute path, directory prefix or glob).  Excluded files
+are never queued; an exclusion added while a queue is being worked takes
+effect before the next file.
+.TP
+.BI "exclude rm" " ID"
+Deactivate an exclusion.
+.TP
+.BR "exclude list" " [\-\-area " \fIA\fR "] [\-\-all]"
+List exclusions.
+.TP
+.BR history " [\-\-area " \fIA\fR "] [\-\-path " \fIGLOB\fR "] [\-\-type " \fIT1,T2\fR "] [\-\-tier " \fIT\fR "] [\-\-since " \fITS\fR "] [\-\-until " \fITS\fR "] [\-\-limit " \fIN\fR "] [\-\-offset " \fIN\fR "] [\-\-asc] [\-\-csv " \fIFILE\fR "] [\-\-types]"
+Query the audit history.
+.B \-\-since
+and
+.B \-\-until
+accept ISO-8601 or a relative duration such as
+.BR 24h .
+.B \-\-csv \-
+writes CSV to stdout;
+.B \-\-types
+lists the event types.
+.TP
+.BR "notify test" " [" \fICHANNEL\fR "] [\-\-severity info|warning|critical]"
+Send a test notification through one or every channel (admin).
+.TP
+.BR "notify status" " [\-\-limit " \fIN\fR ]
+Channel status and recent sends.
+.TP
+.BI "token create" " NAME" " [\-\-scopes " S1,S2 "] [\-\-expires\-in " DURATION "] [\-\-save]"
+Mint a new API token (scopes
+.IR read ", " operate ", " admin ;
+default read).  The plaintext is printed once;
+.B \-\-save
+also stores it in the cache for this URL.  Uses the admin secret or an
+admin-scoped bearer token.
+.TP
+.BR "token list" " [\-\-all]"
+List tokens (admin).
+.TP
+.BI "token revoke" " ID"
+Revoke a token (admin).
+.TP
+.BR "token login" " [" \fITOKEN\fR "] [\-\-name " \fILABEL\fR ]
+Store a token in the cache for this URL (prompted when omitted) and verify
+it against the server.
+.TP
+.B token logout
+Forget the cached token for this URL.
+.TP
+.B token whoami
+Show the identity and scopes the server sees for the current token.
+.TP
+.BR instances " [\-\-discovery\-timeout " \fISECONDS\fR ]
+Discover every file-reaper instance on the network (needs mu2edaq-discovery).
+.TP
+.BR config " [\-\-local]"
+Show the server configuration, or the client's resolved settings and where
+each came from.
+.TP
+.BR version " [\-\-local]"
+Client and server versions.
+.SH EXIT STATUS
+0 on success; 1 for an API or usage error (including 401 and 403, which
+print a hint about
+.BR "token login" );
+2 when the server cannot be reached.
+.SH ENVIRONMENT
+.TP
+.B MU2EDAQ_REAPER_URL
+Base URL.
+.TP
+.B MU2EDAQ_REAPER_INSTANCE
+Instance label to look up via discovery.
+.TP
+.B MU2EDAQ_REAPER_TOKEN
+Bearer token; overrides the cache.
+.TP
+.B MU2EDAQ_REAPER_ADMIN_TOKEN
+Admin secret.
+.TP
+.B MU2EDAQ_REAPER_TIMEOUT
+HTTP timeout.
+.TP
+.B MU2EDAQ_REAPER_CONFIG
+Client configuration file.
+.TP
+.B MU2EDAQ_REAPER_TOKEN_FILE
+Token cache location.
+.SH FILES
+.TP
+.I ~/.config/mu2edaq/file-reaper/tokens.yaml
+Token cache, one entry per URL.  Created with mode 0600 in a 0700 directory;
+the client refuses to read it when it is group- or world-readable.
+.TP
+.IR ./mu2edaq-reaper.yaml ", " ./config/mu2edaq-reaper.yaml ", " ~/.config/mu2edaq/file-reaper/cli.yaml ", " /etc/mu2edaq/file-reaper-cli.yaml
+Client configuration search path.
+.SH EXAMPLES
+Mint the first token with the server's admin secret and cache it:
+.PP
+.RS
+.nf
+mu2edaq-reaper --url http://mu2e-dl-01:5004 --admin-token "$SECRET" \\
+    token create ops --scopes read,operate,admin --save
+.fi
+.RE
+.PP
+Look at the data logger and pause raw-data reaping during a calibration:
+.PP
+.RS
+.nf
+mu2edaq-reaper --instance dl-01 status
+mu2edaq-reaper --instance dl-01 area data-raw
+mu2edaq-reaper --instance dl-01 pause data-raw --reason "calibration run"
+.fi
+.RE
+.PP
+What would the reaper do right now?
+.PP
+.RS
+.nf
+mu2edaq-reaper plan data-raw --limit 50
+.fi
+.RE
+.PP
+Everything deleted in the last day, as CSV:
+.PP
+.RS
+.nf
+mu2edaq-reaper history --type action_delete --since 24h --csv - > deleted.csv
+.fi
+.RE
+.SH SEE ALSO
+.BR mu2edaq-file-reaper (1),
+.BR mu2edaq-file-reaper-api (7),
+.BR mu2edaq-discover (1)

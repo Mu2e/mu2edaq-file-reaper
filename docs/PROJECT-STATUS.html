@@ -1,0 +1,155 @@
+<title>File Reaper Build Tracker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F5F7F8; --surface:#FFFFFF; --ink:#1B2329; --muted:#5B6873; --line:#D9E0E5;
+  --accent:#2E6F8E; --accent-ink:#FFFFFF; --soft:#E6EEF3;
+  --good:#2F8F5B; --warn:#C98A1B; --crit:#C4443A; --todo:#8A97A1;
+  --good-bg:#E4F3EA; --warn-bg:#FBF1DB; --crit-bg:#F9E3E1; --todo-bg:#EDF0F2; --prog-bg:#DFEBF2;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#12181D; --surface:#1A222A; --ink:#E6ECF0; --muted:#98A6B1; --line:#2C3740;
+  --accent:#6FB1D0; --accent-ink:#0F1A21; --soft:#1F2C35;
+  --good:#5FC38A; --warn:#E3AB45; --crit:#E5736A; --todo:#7F8D97;
+  --good-bg:#1B3327; --warn-bg:#3A2E14; --crit-bg:#3C1F1D; --todo-bg:#222B31; --prog-bg:#1B3340;
+}}
+:root[data-theme="dark"]{
+  --bg:#12181D; --surface:#1A222A; --ink:#E6ECF0; --muted:#98A6B1; --line:#2C3740;
+  --accent:#6FB1D0; --accent-ink:#0F1A21; --soft:#1F2C35;
+  --good:#5FC38A; --warn:#E3AB45; --crit:#E5736A; --todo:#7F8D97;
+  --good-bg:#1B3327; --warn-bg:#3A2E14; --crit-bg:#3C1F1D; --todo-bg:#222B31; --prog-bg:#1B3340;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;padding:0 20px;padding-block:32px 64px;margin:0}
+.wrap{max-width:960px;margin:0 auto;display:grid;gap:36px}
+header{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:flex-end;justify-content:space-between;border-bottom:2px solid var(--accent);padding-bottom:16px}
+h1{font-size:28px;font-weight:600;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.meta{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:var(--muted);display:grid;gap:2px;text-align:right}
+h2{font-size:18px;font-weight:600;margin:0 0 12px;text-wrap:balance}
+p{margin:0 0 10px;max-width:68ch}
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);font-size:14px}
+th,td{padding:9px 12px;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
+th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;border-top:0;background:var(--soft)}
+td.mono,.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+.scroll{overflow-x:auto}
+.chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:500;letter-spacing:.02em;white-space:nowrap}
+.done{background:var(--good-bg);color:var(--good)} .prog{background:var(--prog-bg);color:var(--accent)}
+.todo{background:var(--todo-bg);color:var(--todo)} .fail{background:var(--crit-bg);color:var(--crit)} .part{background:var(--warn-bg);color:var(--warn)}
+.bar{height:10px;background:var(--soft);border-radius:5px;overflow:hidden;margin-top:6px}
+.bar span{display:block;height:100%;background:var(--accent)}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.tile{background:var(--surface);border:1px solid var(--line);padding:14px 16px}
+.tile .n{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:26px;font-weight:500;font-variant-numeric:tabular-nums}
+.tile .l{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+svg text{fill:var(--ink);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px}
+svg .axis{stroke:var(--line)} svg .used{fill:var(--accent)} svg .band{fill:var(--soft)}
+svg .trig{stroke:var(--crit)} svg .stop{stroke:var(--good)} svg .thr{stroke:var(--ink);stroke-dasharray:3 3}
+.note{font-size:13px;color:var(--muted)}
+ul{margin:0;padding-left:20px} li{margin:2px 0}
+@media (max-width:600px){ .meta{text-align:left} header{align-items:flex-start} }
+</style>
+<div class="wrap">
+<header>
+  <div>
+    <p class="eyebrow">Mu2e DAQ · mu2edaq-file-reaper</p>
+    <h1>File Reaper Build Tracker</h1>
+  </div>
+  <div class="meta">
+    <span>version 0.1.0 (unreleased)</span>
+    <span>updated 2026-09-11 · phases 1–7 written, final verification and registration pending</span>
+    <span>target AlmaLinux 9 / Python 3.9</span>
+  </div>
+</header>
+
+<section>
+  <div class="summary">
+    <div class="tile"><div class="n">7 / 8</div><div class="l">phases complete</div><div class="bar"><span style="width:88%"></span></div></div>
+    <div class="tile"><div class="n">182</div><div class="l">tests passing at last run (engine, db, notify, scripts, CLI); web suite written, run pending</div></div>
+    <div class="tile"><div class="n">36</div><div class="l">source modules · 16 templates · 8 man pages</div></div>
+    <div class="tile"><div class="n">not yet</div><div class="l">GitHub repo Mu2e/mu2edaq-file-reaper</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Implementation phases</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Phase</th><th>Scope</th><th>Status</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>1 Scaffold</td><td>package layout, pyproject, units / domain / watermarks, settings, config, daemon, scripts, git init</td><td><span class="chip done">done</span></td><td>package, settings, config, units, scripts, CMake, configs</td></tr>
+      <tr><td>2 Database</td><td>SQLAlchemy models, SQLite WAL / Postgres, history · tokens · exclusions · area_state repos</td><td><span class="chip done">done</span></td><td>SQLAlchemy 2 models, WAL pragmas, five repositories</td></tr>
+      <tr><td>3 Engine</td><td>usage, eligibility, FTS gate, policies, scanner, atomic actions, reaper orchestrator, scheduler</td><td><span class="chip done">done</span></td><td>hysteresis, cascade, FTS gate, atomic actions, scheduler; 21 orchestration tests</td></tr>
+      <tr><td>4 Notifications</td><td>mu2e notify, DAQ ZMQ messages, Big Red Box, email, Slack, rate limiter</td><td><span class="chip done">done</span></td><td>five channels, dedup with retry on failure, notification log</td></tr>
+      <tr><td>5 Web</td><td>Flask factory, admin session + bearer auth, pages, REST API v1, templates, JS</td><td><span class="chip done">done</span></td><td>12 pages, 16 templates, reaper.js/css; every route exercised by test_web (run pending)</td></tr>
+      <tr><td>6 CLI</td><td>mu2edaq-reaper subcommands, token cache, discovery lookup</td><td><span class="chip done">done</span></td><td>17 commands; 27 tests against a live Werkzeug server</td></tr>
+      <tr><td>7 Docs</td><td>README, CHANGELOG, CLAUDE.md, INSTALL, DESIGN, man pages (1/3/5/7), dl-01 host config</td><td><span class="chip done">done</span></td><td>plus PROJECT-STATUS.md and tools/make_demo_tree.py</td></tr>
+      <tr><td>8 Registration</td><td>GitHub repo, submodule, testing/common.sh, apps.yaml port 5004, mu2edaq-config</td><td><span class="chip todo">pending</span></td><td>waiting on shell access (safety classifier outage)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Water marks as implemented</h2>
+  <p>Thresholds are percent of capacity <em>used</em> (df convention). A tier triggers at threshold + high_water and keeps acting on every scan until used space falls to threshold − low_water. Defaults shown: warning 80, critical 90, full 95, low_water 10, high_water 0.</p>
+  <div class="scroll"><svg viewBox="0 0 720 120" width="720" height="120" role="img" aria-label="Used-space bar with warning, critical and full trigger and stop points">
+    <rect class="band" x="40" y="40" width="640" height="22"></rect>
+    <rect class="used" x="40" y="40" width="563" height="22"></rect>
+    <line class="axis" x1="40" y1="70" x2="680" y2="70"></line>
+    <g>
+      <line class="stop" x1="488" y1="34" x2="488" y2="70" stroke-width="2"></line><text x="488" y="30" text-anchor="middle">stop 70</text>
+      <line class="trig" x1="552" y1="34" x2="552" y2="70" stroke-width="2"></line><text x="552" y="88" text-anchor="middle">warn 80</text>
+      <line class="stop" x1="552" y1="72" x2="552" y2="78" stroke-width="2"></line>
+      <line class="trig" x1="616" y1="34" x2="616" y2="70" stroke-width="2"></line><text x="616" y="88" text-anchor="middle">crit 90</text>
+      <line class="trig" x1="648" y1="34" x2="648" y2="70" stroke-width="2"></line><text x="655" y="30" text-anchor="middle">full 95</text>
+    </g>
+    <text x="40" y="106">0 %</text><text x="360" y="106" text-anchor="middle">used 88 % → critical not yet active, warning active until 70 %</text><text x="680" y="106" text-anchor="end">100 %</text>
+  </svg></div>
+</section>
+
+<section>
+  <h2>Test matrix</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Suite</th><th>Covers</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">test_units, test_watermarks</td><td>size/percent/duration parsing; trigger and stop at ±ε; clamps; transitions</td><td><span class="chip done">passing</span></td></tr>
+      <tr><td class="mono">test_eligibility, test_policies</td><td>one case per rejection reason; LRU vs Age keys; glob precedence; queue ordering</td><td><span class="chip done">passing</span></td></tr>
+      <tr><td class="mono">test_actions, test_scanner</td><td>every refusal path; atomic compress; preserved timestamps; symlink and hardlink handling</td><td><span class="chip done">passing</span></td></tr>
+      <tr><td class="mono">test_reaper, test_scheduler</td><td>single tier to low water; hysteresis across scans; cascade; pause and exclude mid-queue; shutdown</td><td><span class="chip done">passing</span></td></tr>
+      <tr><td class="mono">test_db, test_auth, test_notify</td><td>WAL pragma; concurrent writers; token lifecycle; channel payload shapes</td><td><span class="chip done">passing</span></td></tr>
+      <tr><td class="mono">test_cli</td><td>token cache permissions; config precedence; CLI end to end against a live server</td><td><span class="chip done">27 passing</span></td></tr>
+      <tr><td class="mono">test_web</td><td>every page and API route; 401/403/CSRF paths; token lifecycle and scopes</td><td><span class="chip part">written, run pending</span></td></tr>
+      <tr><td class="mono">test_scripts, test_packaging</td><td>start/stop scripts against real processes; man page versions; nav endpoints; 3.9 syntax</td><td><span class="chip part">scripts passing, packaging rerun pending</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Platform compatibility</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Platform</th><th>Python</th><th>Bootstrap</th><th>pytest</th><th>Daemon mode</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>macOS 15 arm64 (dev)</td><td class="mono">3.12</td><td><span class="chip done">ok</span></td><td><span class="chip done">155 pass</span></td><td>fork</td><td>primary development host</td></tr>
+      <tr><td>AlmaLinux 9 (mu2e-mgr-01, dl-01)</td><td class="mono">3.9.21</td><td><span class="chip todo">pending</span></td><td><span class="chip todo">pending</span></td><td>fork</td><td>production; Optional[X] typing only</td></tr>
+      <tr><td>Windows 11</td><td class="mono">3.9+</td><td><span class="chip todo">pending</span></td><td><span class="chip todo">pending</span></td><td>foreground only</td><td>bootstrap.ps1 / start .ps1</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Design decisions</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Decision</th><th>Choice</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Threshold semantics</td><td>percent used, hysteresis via high/low water marks</td><td>matches the spec's water-mark wording; compares with df -h</td></tr>
+      <tr><td>Cross-tier rule</td><td>highest active tier per pass, re-enumerate, cascade up to 3 passes</td><td>queues never stale; compress-then-delete order falls out naturally</td></tr>
+      <tr><td>Default policies</td><td>warning LRU-Compress, critical LRU-Delete, full Age-Delete, gzip</td><td>stdlib compressor available on AL9 Python 3.9</td></tr>
+      <tr><td>FTS safety</td><td>optional per-area fts_db gate, fails closed</td><td>never delete untransferred raw data; non-FTS volumes stay usable</td></tr>
+      <tr><td>Action safety</td><td>dir_fd identity re-verification, atomic temp + rename + verify</td><td>a plan from the scan is never trusted at action time</td></tr>
+      <tr><td>UI auth</td><td>open reads, admin token for writes, scoped bearer tokens on the API</td><td>control-room network; SSO can layer on later</td></tr>
+      <tr><td>Storage</td><td>SQLAlchemy 2, SQLite WAL default, Postgres via URL</td><td>project convention</td></tr>
+      <tr><td>Port and discovery</td><td>HTTP 5004, app "file-reaper", label and api_port in meta</td><td>5002 diskwatcher, 5003 fts already taken</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">The four design questions (thresholds, default policies, FTS guard, UI auth) were answered with the recommended option because no reply arrived within the planning window. Each is a config or small code change if you want a different choice.</p>
+</section>
+</div>

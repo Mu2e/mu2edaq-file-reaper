@@ -1,0 +1,188 @@
+.TH MU2EDAQ-FILE-REAPER-API 7 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.SH NAME
+mu2edaq-file-reaper-api \- REST API of the Mu2e DAQ file reaper (version 1)
+.SH SYNOPSIS
+.B http://\fIhost\fR:5004/api/v1/\fIresource\fR
+.PP
+.nf
+curl -s http://mu2e-dl-01:5004/api/v1/state | python3 -m json.tool
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\
+     -d '{"reason": "calibration"}' http://mu2e-dl-01:5004/api/v1/areas/data-raw/pause
+.fi
+.SH AUTHENTICATION
+Three mechanisms, checked in this order:
+.TP
+.B Bearer token
+.IR "Authorization: Bearer rpr_..." .
+Tokens are created on the
+.B /tokens
+page or with
+.B POST /api/v1/tokens
+and carry scopes
+.BR read " < " operate " < " admin
+(a higher scope implies the lower ones).  Only a PBKDF2 hash is stored; the
+plaintext is shown once at creation.
+.TP
+.B Admin header
+.IR "X-Admin-Token: <reaper.admin_token>"
+grants the admin scope.  Intended for minting the first token.
+.TP
+.B Admin session
+The browser's session cookie after
+.BR "POST /login" .
+Mutating requests made with a session must also send
+.IR "X-CSRF-Token" ,
+the value the page embeds.
+.PP
+GET endpoints need no authentication while
+.B api.open_read
+is true (default).  Every mutating call always needs one of the mechanisms
+and is recorded in the history with
+.I actor
+set to
+.IR token:<name> " or " ui:admin .
+.SH ERRORS
+Errors are JSON objects
+.IR "{\[dq]error\[dq]: \[dq]message\[dq]}"
+with status 400 (bad request), 401 (authentication required), 403 (scope or
+CSRF), 404 (unknown area, entry, token or exclusion) or 409 (conflict, for
+example a dry run while a scan is running).
+.SH ENDPOINTS
+Scope column: \- means none, R read, O operate, A admin.
+.SS Liveness
+.TP
+.B GET /health \-
+.IR status " (ok | degraded), " version ", " label ", " uptime_s ", " areas ", " scan_interval ", " dry_run ", " config_issues ", " database_ok ", " scheduler
+(alive, stalled, tick_age_s, next_tick_in_s, busy).
+.TP
+.B GET /version \-
+Name, version, label, api.
+.TP
+.B GET /whoami \-
+Kind (token | session | admin_header | anonymous), name, scopes, actor of the
+caller.
+.SS Areas
+.TP
+.B GET /state R
+Everything: summary counts, every area snapshot, scheduler health.
+.TP
+.B GET /areas R
+Area snapshots and summary.
+.TP
+.B GET /areas/<name> R
+One snapshot plus its configuration and
+.I usage_history
+(ts, used_pct from past scans).
+.TP
+.B POST /areas/<name>/pause O
+Body
+.IR "{\[dq]reason\[dq]}" .
+Scans continue, nothing is acted on.
+.TP
+.B POST /areas/<name>/resume O
+.TP
+.B POST /areas/<name>/rescan O
+Request an immediate scan.
+.TP
+.B POST /areas/<name>/disable A
+No scans until enabled.
+.TP
+.B POST /areas/<name>/enable A
+.TP
+.B POST /dry-run/<name> O
+Run one scan now in dry-run mode on the request thread; returns
+.I report
+(scan_id, outcome, passes, acted, bytes_freed) and the resulting snapshot.
+409 while a scan of that area is running.
+.SS Queues
+.TP
+.B GET /queues R
+Parameters
+.IR area ", " kind " (compress | delete), " status .
+Returns
+.IR totals " and " entries ,
+each with id, path, rel, name, size, size_str, atime, mtime, key_ts, owner,
+group, mode, queue, tier, policy, status, reason, area, area_label.
+.TP
+.B GET /queues/<id> R
+One entry by id (dev:ino) or path.
+.SS Exclusions
+.TP
+.B GET /exclusions R
+Parameters
+.IR area ", " all .
+.TP
+.B POST /exclusions O
+Body
+.IR pattern " (or " path "), " area " (null = every area), " kind " (path | glob), " reason ", " expires_in " (duration) or " expires_at .
+201 with the stored rule.
+.TP
+.B DELETE /exclusions/<id> O
+Deactivates the rule.
+.SS History
+.TP
+.B GET /history R
+Parameters
+.IR area ", " path " (glob), " type " (comma-separated event types), " tier ", " scan_id ", " since ", " until " (ISO-8601 or relative such as 24h), " limit " (default 100), " offset ", " order " (desc | asc), " format " (json | csv)."
+Returns
+.IR total ", " events .
+Each event: id, ts, area, event_type, path, tier, policy, queue, outcome,
+reason, size_bytes, bytes_freed, duration_s, used_pct_before, used_pct_after,
+count, actor, scan_id, detail.
+.TP
+.B GET /history/types R
+The event type vocabulary.
+.SS Notifications
+.TP
+.B GET /notifications R
+Channels (name, enabled, min_severity, disabled_reason, last_sent), recent
+log rows, sent and failed counters.
+.TP
+.B POST /notifications/test A
+Body
+.IR channel " (optional), " severity ", " title ", " message .
+.SS Tokens
+.TP
+.B GET /tokens A
+Parameter
+.IR all .
+Never includes hashes or plaintext.
+.TP
+.B POST /tokens A
+Body
+.IR name ", " scopes " (list or comma string), " expires_in .
+201 with
+.I token
+(plaintext, once) and
+.IR record .
+.TP
+.B DELETE /tokens/<id> A
+Revoke.
+.SS Configuration
+.TP
+.B GET /config R
+Settings in effect (secrets redacted), parsed areas, issues, notification
+configuration.
+.SH AREA SNAPSHOT
+Every snapshot carries exactly these keys:
+name, path, real_path, label, enabled, dry_run, state (GOOD WARNING CRITICAL
+FULL PAUSED DISABLED UNKNOWN MISSING), rank, paused, paused_reason,
+paused_by, paused_at, disabled, disabled_reason, disabled_by, disabled_at,
+usage (total used free used_pct ts), usage_str, atime_mode, tiers (per tier:
+threshold trigger stop policy min_age active low_water high_water
+bytes_to_stop bytes_to_stop_str), active_tiers, selected_tier, scan (scan_id
+pass_no started finished duration_s outcome reason acted bytes_freed
+bytes_freed_str files_seen), queues (compress and delete: total shown
+entries), progress (acting current_path acted remaining bytes_freed),
+reject_counts, scan_errors, warnings, config_errors, last_scan_at,
+next_scan_in_s.
+.SH EVENT TYPES
+scan_start, scan_end, scan_abort, tier_activate, tier_deactivate, queue_add,
+queue_remove, action_delete, action_compress, action_failed,
+policy_insufficient, space_not_reclaimed, exclusion_add, exclusion_remove,
+area_pause, area_resume, area_disable, area_enable, notification_sent,
+token_create, token_revoke, maintenance.
+.SH SEE ALSO
+.BR mu2edaq-file-reaper (1),
+.BR mu2edaq-reaper (1),
+.BR mu2edaq-file-reaper.conf (5)

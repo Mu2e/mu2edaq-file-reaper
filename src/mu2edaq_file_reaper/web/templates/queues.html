@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+  {{ m.stat_card('q', 'compress', 'QUEUED FOR COMPRESS', 'compress', 'Across all areas (not just the current filter)') }}
+  {{ m.stat_card('q', 'delete',   'QUEUED FOR DELETE',   'delete',   'Across all areas (not just the current filter)') }}
+  {{ m.stat_card('q', 'shown',    'SHOWN',               'total',    'Entries matching the filter') }}
+</div>
+
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <form class="d-flex align-items-center gap-2 flex-wrap" id="filter-form" onsubmit="return false">
+      <i class="bi bi-list-ol"></i>
+      <select class="form-select form-select-sm" id="f-area" style="width:auto" title="Area">
+        <option value="">All areas</option>
+        {% for a in areas %}
+        <option value="{{ a.name }}" {% if a.name == sel_area %}selected{% endif %}>{{ a.label }}{% if a.label != a.name %} ({{ a.name }}){% endif %}</option>
+        {% endfor %}
+      </select>
+      <select class="form-select form-select-sm" id="f-kind" style="width:auto" title="Queue">
+        <option value="">Both queues</option>
+        <option value="compress" {% if sel_kind == 'compress' %}selected{% endif %}>compress</option>
+        <option value="delete" {% if sel_kind == 'delete' %}selected{% endif %}>delete</option>
+      </select>
+      <select class="form-select form-select-sm" id="f-status" style="width:auto" title="Entry status">
+        <option value="">Any status</option>
+        {% for s in ['queued', 'acting', 'done', 'skipped', 'failed', 'dry_run'] %}
+        <option value="{{ s }}" {% if s == sel_status %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+      <input type="search" class="form-control form-control-sm" id="f-text" placeholder="filter path / owner" style="width:14em">
+      <small class="text-muted ms-1" id="queues-count"></small>
+    </form>
+    {{ m.refresh_controls() }}
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            {{ m.sort_th('queues', 'status', 'Status') }}
+            {{ m.sort_th('queues', 'area',   'Area') }}
+            {{ m.sort_th('queues', 'name',   'Path') }}
+            {{ m.sort_th('queues', 'size',   'Size') }}
+            {{ m.sort_th('queues', 'atime',  'Last access') }}
+            {{ m.sort_th('queues', 'mtime',  'Last modified') }}
+            {{ m.sort_th('queues', 'key',    'Ordering key age') }}
+            {{ m.sort_th('queues', 'owner',  'Owner') }}
+            <th>Tier / Policy</th>
+            {% if is_admin %}<th></th>{% endif %}
+          </tr>
+        </thead>
+        <tbody id="tbody-queues">
+          <tr><td colspan="10" class="text-muted p-3">Loading&hellip;</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer text-muted small">
+    Entries are shown in the order the policy will act on them (ordering key ascending: oldest access for LRU
+    policies, oldest modification for Age policies). Each area publishes at most
+    <code>reaper.queue_publish_limit</code> entries. Click a row for every field.
+  </div>
+</div>
+
+{{ m.admin_hint('Excluding a file') }}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const COLSPAN = {{ 10 if is_admin else 9 }};
+const STATUS_RANK = {acting: 0, queued: 1, dry_run: 2, skipped: 3, failed: 4, done: 5};
+
+registerTable('queues', {
+  status: r => STATUS_RANK[r.status] === undefined ? 9 : STATUS_RANK[r.status],
+  area:   r => r.area_label || r.area,
+  name:   r => r.path,
+  size:   r => r.size,
+  atime:  r => r.atime,
+  mtime:  r => r.mtime,
+  key:    r => r.key_ts,
+  owner:  r => r.owner,
+}, 'key', 1);
+
+let lastEntries = [];
+
+function filterUrl() {
+  return '/api/v1/queues' + qs({
+    area: document.getElementById('f-area').value,
+    kind: document.getElementById('f-kind').value,
+    status: document.getElementById('f-status').value,
+  });
+}
+
+function textFilter(entries) {
+  const t = document.getElementById('f-text').value.trim().toLowerCase();
+  if (!t) return entries;
+  return entries.filter(e => (e.path || '').toLowerCase().includes(t) || (e.owner || '').toLowerCase().includes(t) ||
+    (e.group || '').toLowerCase().includes(t));
+}
+
+function showEntry(idx) {
+  const e = lastEntries[idx];
+  if (!e) return;
+  const now = Date.now() / 1000;
+  const view = Object.assign({}, e, {
+    size: e.size + ' (' + e.size_str + ')',
+    atime: fmtTs(e.atime) + ' (' + fmtAge(now - e.atime) + ' ago)',
+    mtime: fmtTs(e.mtime) + ' (' + fmtAge(now - e.mtime) + ' ago)',
+    key_ts: fmtTs(e.key_ts) + ' (' + fmtAge(now - e.key_ts) + ' ago)',
+  });
+  let html = kvTable(view, ['id', 'area', 'area_label', 'path', 'rel', 'name', 'size', 'atime', 'mtime', 'key_ts',
+    'owner', 'group', 'mode', 'queue', 'tier', 'policy', 'status', 'reason']);
+  if (IS_ADMIN) {
+    html += '<div class="mt-3 text-end"><button class="btn btn-sm btn-outline-danger" onclick=\'excludePath(' +
+      escHtml(JSON.stringify(e.path)) + ',' + escHtml(JSON.stringify(e.area)) + ')\'>' +
+      '<i class="bi bi-shield-x"></i> Exclude this file</button></div>';
+  }
+  showDetail(e.queue + ' queue entry', html);
+}
+
+function queueRows(entries) {
+  if (!entries.length) return null;
+  const now = Date.now() / 1000;
+  let html = '';
+  entries.forEach((e, i) => {
+    html += '<tr class="clickable' + (e.status === 'acting' ? ' row-acting' : '') + '" onclick="showEntry(' + i + ')">';
+    html += '<td>' + badge(e.status || 'queued', e.reason || '') + '</td>';
+    html += '<td class="small"><a href="/areas/' + encodeURIComponent(e.area) + '" onclick="event.stopPropagation()">' + escHtml(e.area_label || e.area) + '</a></td>';
+    html += '<td class="path-cell">' + escHtml(e.path) + '</td>';
+    html += '<td class="text-nowrap" title="' + e.size + ' bytes">' + escHtml(e.size_str) + '</td>';
+    html += '<td class="small text-nowrap" title="' + escHtml(fmtTs(e.atime)) + '">' + fmtAge(now - e.atime) + ' ago</td>';
+    html += '<td class="small text-nowrap" title="' + escHtml(fmtTs(e.mtime)) + '">' + fmtAge(now - e.mtime) + ' ago</td>';
+    html += '<td class="small text-nowrap" title="' + escHtml(fmtTs(e.key_ts)) + '">' + fmtAge(now - e.key_ts) + '</td>';
+    html += '<td class="small">' + escHtml(e.owner || DASH) + (e.group ? '<span class="text-muted">:' + escHtml(e.group) + '</span>' : '') + '</td>';
+    html += '<td class="small text-nowrap">' + badge(e.queue) + ' ' + badge(e.tier) + '<br><span class="text-muted">' + escHtml(e.policy) + '</span></td>';
+    if (IS_ADMIN) {
+      html += '<td class="text-end pe-2" onclick="event.stopPropagation()"><button class="btn btn-sm btn-outline-secondary py-0" title="Exclude" ' +
+        'onclick=\'excludePath(' + escHtml(JSON.stringify(e.path)) + ',' + escHtml(JSON.stringify(e.area)) + ')\'><i class="bi bi-shield-x"></i></button></td>';
+    }
+    html += '</tr>';
+  });
+  return html;
+}
+
+function renderQueues(data) {
+  const totals = data.totals || {};
+  const entries = textFilter(data.entries || []);
+  renderStatCards('q', {compress: totals.compress || 0, delete: totals.delete || 0, shown: entries.length});
+  document.getElementById('queues-count').textContent = '(' + entries.length + ' of ' + (data.total || 0) + ')';
+  updateSortIndicators('queues');
+  lastEntries = sortRows('queues', entries);
+  fillTable('tbody-queues', queueRows(lastEntries), COLSPAN, 'No queue entries match. Queues fill when a tier is active.');
+}
+
+for (const id of ['f-area', 'f-kind', 'f-status']) {
+  document.getElementById(id).addEventListener('change', () => {
+    setDataUrl(filterUrl());
+    const p = new URLSearchParams();
+    for (const [k, el] of [['area', 'f-area'], ['kind', 'f-kind'], ['status', 'f-status']]) {
+      if (document.getElementById(el).value) p.set(k, document.getElementById(el).value);
+    }
+    history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p : ''));
+    refreshData();
+  });
+}
+document.getElementById('f-text').addEventListener('input', () => { if (currentData) renderQueues(currentData); });
+
+startDashboard(filterUrl(), renderQueues);
+</script>
+{% endblock %}

@@ -1,0 +1,45 @@
+# mu2edaq-file-reaper-test.yaml — laptop / demo configuration
+#
+# Points at a throw-away tree and a FAKE disk-usage file so the whole
+# warning -> critical -> full walk can be exercised without filling a disk:
+#
+#     python tools/make_demo_tree.py ./data/demo            # creates files with old atimes
+#     ./start-mu2edaq-file-reaper.sh -c config/mu2edaq-file-reaper-test.yaml
+#     # then edit data/demo-usage.json to move "used" up and down
+#
+# reaper.fake_usage_file maps an area path to [total, used, free] in bytes and
+# is re-read on every measurement.  NEVER set it in production.
+
+reaper:
+  label: "demo"
+  web_port: 5004
+  scan_interval: 30
+  dry_run: true
+  pid_file: "./file-reaper.pid"
+  log_file: "./logs/mu2edaq-file-reaper-test.log"
+  admin_token: "demo-admin"
+  fake_usage_file: "./data/demo-usage.json"
+  allow_shallow_root: true
+
+database:
+  url: "sqlite:///./data/file-reaper-test.db"
+
+discovery:
+  enabled: false
+
+defaults:
+  settle_seconds: 0
+  tiers:
+    warning:  {policy: LRU-Compress, min_age: "5d"}
+    critical: {policy: LRU-Delete,   min_age: "10d"}
+    full:     {policy: Age-Delete,   min_age: "1d"}
+
+areas:
+  - path: ./data/demo
+    label: "Demo tree"
+  - path: /Users/anorman/novarwgt_python
+    label: "Test"
+
+notifications:
+  mu2e_notify: {enabled: false}
+  daq_messages: {enabled: false}

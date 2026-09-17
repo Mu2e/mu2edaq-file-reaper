@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{{ url_for('views.index') }}">Areas</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ name }}</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+  <div>
+    <h4 class="mb-0">
+      <span id="area-state-badge">{{ m.state_badge(snap.state) }}</span>
+      {{ (area_cfg.label if area_cfg else (snap.label or name)) }}
+      {% if area_cfg and area_cfg.dry_run %}<span class="badge bg-warning text-dark">dry-run</span>{% endif %}
+    </h4>
+    <div class="path-cell text-muted">{{ area_cfg.path if area_cfg else (snap.path or '') }}
+      {% if area_cfg and area_cfg.real_path != area_cfg.path %}<span class="ms-1">&rarr; {{ area_cfg.real_path }}</span>{% endif %}
+    </div>
+    <div class="small text-muted" id="area-flags"></div>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <div id="area-actions"></div>
+    {{ m.refresh_controls() }}
+  </div>
+</div>
+
+{% if not area_cfg %}
+<div class="alert alert-warning small">
+  <i class="bi bi-exclamation-triangle-fill"></i> This area is present in the live state but no longer in the
+  configuration file; it will disappear on restart.
+</div>
+{% endif %}
+
+<div id="area-alerts"></div>
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-pie-chart"></i> Usage</div>
+      <div class="card-body">
+        <div id="usage-bar" class="mb-2"><span class="text-muted">Loading&hellip;</span></div>
+        <table class="table table-sm kv-table mb-0">
+          <tbody>
+            <tr><th>Used</th><td id="u-used">&mdash;</td></tr>
+            <tr><th>Free</th><td id="u-free">&mdash;</td></tr>
+            <tr><th>Capacity</th><td id="u-total">&mdash;</td></tr>
+            <tr><th>Measured</th><td id="u-ts">&mdash;</td></tr>
+            <tr><th>atime mode</th><td id="u-atime">&mdash;</td></tr>
+            <tr><th>Last scan</th><td id="u-scan">&mdash;</td></tr>
+            <tr><th>Next scan</th><td id="u-next">&mdash;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between">
+        <span><i class="bi bi-graph-up"></i> Used % history <small class="text-muted" id="spark-count"></small></span>
+        <small class="text-muted">dashed lines: tier thresholds</small>
+      </div>
+      <div class="card-body">
+        <div id="sparkline-wrap"><span class="text-muted small">Loading&hellip;</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-layers"></i> Tiers</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead class="table-light">
+              <tr><th class="ps-3">Tier</th><th>Threshold</th><th>Trigger</th><th>Stop</th><th>Policy</th>
+                  <th>Min age</th><th>Active</th><th>To stop</th></tr>
+            </thead>
+            <tbody id="tbody-tiers">
+              {% if area_cfg and area_cfg.tiers %}
+                {% for tname in ['warning', 'critical', 'full'] if tname in area_cfg.tiers %}
+                {% set t = area_cfg.tiers[tname] %}
+                <tr><td class="ps-3">{{ m.state_badge(tname) }}</td><td>{{ fmt_pct(t.threshold) }}</td>
+                    <td class="text-muted">&mdash;</td><td class="text-muted">&mdash;</td>
+                    <td>{{ t.policy }}</td><td>{{ fmt_duration(t.min_age) }}</td>
+                    <td class="text-muted">&mdash;</td><td class="text-muted">&mdash;</td></tr>
+                {% endfor %}
+              {% else %}
+                <tr><td colspan="8" class="text-muted p-3">No tiers configured; this area is monitor-only.</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-footer small text-muted">
+        Trigger = threshold + high_water; stop = threshold &minus; low_water. Actions run while used% is above
+        the selected tier's stop mark.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-funnel"></i> Rejected candidates <small class="text-muted">(last scan)</small></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light"><tr><th class="ps-3">Reason</th><th class="text-end pe-3">Files</th></tr></thead>
+          <tbody id="tbody-rejects"><tr><td colspan="2" class="text-muted p-3">Loading&hellip;</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card-footer small text-muted" id="scan-summary"></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  {% for kind, icon in [('compress', 'bi-file-zip'), ('delete', 'bi-trash')] %}
+  <div class="col-xl-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi {{ icon }}"></i> <span class="badge badge-{{ kind }}">{{ kind }}</span> queue
+          <small class="text-muted ms-1" id="q-{{ kind }}-count"></small></span>
+        <a class="small" href="{{ url_for('views.queues', area=name, kind=kind) }}">all entries &rarr;</a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive" style="max-height:420px;overflow:auto">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr><th class="ps-3">#</th><th>Path</th><th>Size</th><th>Key age</th><th>Owner</th><th>Tier</th><th>Status</th>{% if is_admin %}<th></th>{% endif %}</tr>
+            </thead>
+            <tbody id="tbody-q-{{ kind }}"><tr><td colspan="8" class="text-muted p-3">Loading&hellip;</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-clock-history"></i> Recent history <small class="text-muted">(latest 50)</small></span>
+    <a class="small" href="{{ url_for('views.history', area=name) }}">full history &rarr;</a>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr><th class="ps-3">Time</th><th>Event</th><th>Path</th><th>Tier</th><th>Outcome</th><th>Reason</th>
+              <th>Size / freed</th><th>Used %</th><th>Actor</th></tr>
+        </thead>
+        <tbody id="tbody-history"><tr><td colspan="9" class="text-muted p-3">Loading&hellip;</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if area_cfg %}
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-gear"></i> Configuration</div>
+  <div class="card-body p-0">
+    <div class="row g-0">
+      <div class="col-lg-6">
+        <table class="table table-sm kv-table mb-0">
+          <tbody>
+            <tr><th class="ps-3">Name</th><td>{{ area_cfg.name }}</td></tr>
+            <tr><th class="ps-3">Enabled</th><td>{{ m.yes_no(area_cfg.enabled) }}</td></tr>
+            <tr><th class="ps-3">Dry run</th><td>{{ m.yes_no(area_cfg.dry_run) }}</td></tr>
+            <tr><th class="ps-3">Include</th><td>{{ area_cfg.include | join(', ') }}</td></tr>
+            <tr><th class="ps-3">Exclude</th><td>{{ area_cfg.exclude | join(', ') }}</td></tr>
+            <tr><th class="ps-3">Settle</th><td>{{ fmt_duration(area_cfg.settle_seconds) }}</td></tr>
+            <tr><th class="ps-3">FTS gate</th><td>{{ area_cfg.fts_db or '(none)' }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="col-lg-6">
+        <table class="table table-sm kv-table mb-0">
+          <tbody>
+            <tr><th class="ps-3">Compressor</th><td>{{ area_cfg.compressor }} level {{ area_cfg.compress_level }}</td></tr>
+            <tr><th class="ps-3">Skip suffixes</th><td>{{ area_cfg.skip_suffixes | join(', ') }}</td></tr>
+            <tr><th class="ps-3">Max actions / scan</th><td>{{ area_cfg.max_actions_per_scan or 'unlimited' }}</td></tr>
+            <tr><th class="ps-3">Prune empty dirs</th><td>{{ m.yes_no(area_cfg.prune_empty_dirs) }}</td></tr>
+            <tr><th class="ps-3">Check open files</th><td>{{ m.yes_no(area_cfg.check_open_files) }}</td></tr>
+            <tr><th class="ps-3">Allow hardlinks</th><td>{{ m.yes_no(area_cfg.allow_hardlinks) }}</td></tr>
+            <tr><th class="ps-3">Config errors</th>
+                <td>{% if area_cfg.config_errors %}<span class="text-danger">{{ area_cfg.config_errors | join('; ') }}</span>{% else %}none{% endif %}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const AREA = {{ name | tojson }};
+
+function sparkline(points, tiers) {
+  const W = 640, H = 110, padL = 30, padR = 8, padT = 8, padB = 16;
+  const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+  const yOf = pct => y1 - (Math.max(0, Math.min(100, pct)) / 100) * (y1 - y0);
+  let svg = '<svg class="sparkline" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="used percent history">';
+  svg += '<line class="spark-axis" x1="' + x0 + '" y1="' + y0 + '" x2="' + x0 + '" y2="' + y1 + '"/>';
+  svg += '<line class="spark-axis" x1="' + x0 + '" y1="' + y1 + '" x2="' + x1 + '" y2="' + y1 + '"/>';
+  for (const v of [0, 50, 100]) {
+    svg += '<text class="spark-label" x="' + (x0 - 4) + '" y="' + (yOf(v) + 3) + '" text-anchor="end">' + v + '</text>';
+  }
+  for (const tn of ['warning', 'critical', 'full']) {
+    const t = tiers && tiers[tn];
+    if (!t) continue;
+    const y = yOf(t.threshold);
+    svg += '<line class="tier-' + tn + '" x1="' + x0 + '" y1="' + y + '" x2="' + x1 + '" y2="' + y + '"/>';
+    svg += '<text class="tier-text-' + tn + '" x="' + (x1 - 2) + '" y="' + (y - 2) + '" text-anchor="end">' + tn + ' ' + fmtPct(t.threshold, 0) + '</text>';
+  }
+  const pts = (points || []).filter(p => p.used_pct !== null && p.used_pct !== undefined);
+  if (pts.length) {
+    const n = pts.length;
+    const xOf = i => n === 1 ? (x0 + x1) / 2 : x0 + (i / (n - 1)) * (x1 - x0);
+    let d = '', area = 'M' + xOf(0) + ',' + y1;
+    pts.forEach((p, i) => {
+      const x = xOf(i), y = yOf(p.used_pct);
+      d += (i ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
+      area += 'L' + x.toFixed(1) + ',' + y.toFixed(1);
+    });
+    area += 'L' + xOf(n - 1) + ',' + y1 + 'Z';
+    svg += '<path class="spark-area" d="' + area + '"/>';
+    svg += '<path class="spark-line" d="' + d + '"/>';
+    const last = pts[n - 1];
+    svg += '<circle class="spark-dot" cx="' + xOf(n - 1) + '" cy="' + yOf(last.used_pct) + '" r="2.5">' +
+      '<title>' + escHtml(fmtTs(last.ts)) + ': ' + fmtPct(last.used_pct) + '</title></circle>';
+    svg += '<text class="spark-label" x="' + x0 + '" y="' + (H - 4) + '">' + escHtml(fmtTs(pts[0].ts)) + '</text>';
+    svg += '<text class="spark-label" x="' + x1 + '" y="' + (H - 4) + '" text-anchor="end">' + escHtml(fmtTs(last.ts)) + '</text>';
+  } else {
+    svg += '<text class="spark-label" x="' + ((x0 + x1) / 2) + '" y="' + ((y0 + y1) / 2) + '" text-anchor="middle">no completed scans yet</text>';
+  }
+  return svg + '</svg>';
+}
+
+function queueRows(kind, q) {
+  const entries = (q && q.entries) || [];
+  if (!entries.length) return null;
+  const now = Date.now() / 1000;
+  let html = '';
+  entries.forEach((e, i) => {
+    html += '<tr class="row-q-' + escHtml(e.status || 'queued') + '">';
+    html += '<td class="ps-3 text-muted">' + (i + 1) + '</td>';
+    html += '<td class="path-cell" title="' + escHtml(e.path) + '">' + escHtml(e.rel || e.path) + '</td>';
+    html += '<td class="text-nowrap">' + escHtml(e.size_str) + '</td>';
+    html += '<td class="text-nowrap" title="' + escHtml(fmtTs(e.key_ts)) + '">' + fmtAge(now - e.key_ts) + '</td>';
+    html += '<td class="small">' + escHtml(e.owner || DASH) + '</td>';
+    html += '<td>' + badge(e.tier) + '</td>';
+    html += '<td>' + badge(e.status || 'queued', e.reason || '') + '</td>';
+    if (IS_ADMIN) {
+      html += '<td class="text-end pe-2"><button class="btn btn-sm btn-outline-secondary py-0" title="Exclude this file" ' +
+        'onclick=\'excludePath(' + escHtml(JSON.stringify(e.path)) + ', AREA)\'><i class="bi bi-shield-x"></i></button></td>';
+    }
+    html += '</tr>';
+  });
+  return html;
+}
+
+function historyRows(events) {
+  if (!events.length) return null;
+  let html = '';
+  for (const ev of events) {
+    html += '<tr class="clickable" onclick=\'showDetail("Event #' + ev.id + '", ' + JSON.stringify(jsonPre(ev)) + ')\'>';
+    html += '<td class="ps-3 small text-nowrap" title="' + escHtml(ev.ts) + '">' + fmtTs(ev.ts) + '</td>';
+    html += '<td><span class="event-type">' + escHtml(ev.event_type) + '</span></td>';
+    html += '<td class="path-cell">' + escHtml(ev.path || '') + '</td>';
+    html += '<td>' + (ev.tier ? badge(ev.tier) : '') + '</td>';
+    html += '<td>' + (ev.outcome ? badge(ev.outcome) : '') + '</td>';
+    html += '<td class="small">' + escHtml(ev.reason || '') + '</td>';
+    html += '<td class="small text-nowrap">' + (ev.size_bytes !== null && ev.size_bytes !== undefined ? fmtBytes(ev.size_bytes) : '') +
+      (ev.bytes_freed ? ' <span class="text-success">&minus;' + fmtBytes(ev.bytes_freed) + '</span>' : '') + '</td>';
+    html += '<td class="small text-nowrap">' + (ev.used_pct_before !== null && ev.used_pct_before !== undefined
+      ? fmtPct(ev.used_pct_before) + (ev.used_pct_after !== null && ev.used_pct_after !== undefined ? ' &rarr; ' + fmtPct(ev.used_pct_after) : '')
+      : '') + '</td>';
+    html += '<td class="small">' + escHtml(ev.actor || '') + '</td>';
+    html += '</tr>';
+  }
+  return html;
+}
+
+function renderArea(data) {
+  const a = data.area || {};
+  const state = a.state || 'UNKNOWN';
+  document.getElementById('area-state-badge').innerHTML = badge(state);
+  const flags = [];
+  if (a.paused) flags.push('<span class="badge badge-paused">paused</span> ' + escHtml((a.paused_by || '') + (a.paused_reason ? ': ' + a.paused_reason : '')) + (a.paused_at ? ' (' + fmtAgo(a.paused_at) + ')' : ''));
+  if (a.disabled) flags.push('<span class="badge badge-disabled">disabled</span> ' + escHtml((a.disabled_by || '') + (a.disabled_reason ? ': ' + a.disabled_reason : '')) + (a.disabled_at ? ' (' + fmtAgo(a.disabled_at) + ')' : ''));
+  if (a.selected_tier) flags.push('acting tier: ' + badge(a.selected_tier));
+  document.getElementById('area-flags').innerHTML = flags.join(' &middot; ');
+  document.getElementById('area-actions').innerHTML = areaActionButtons(a);
+
+  let alerts = '';
+  for (const e of (a.config_errors || [])) alerts += '<div class="alert alert-danger py-2 small mb-2"><i class="bi bi-x-octagon-fill"></i> ' + escHtml(e) + '</div>';
+  for (const w of (a.warnings || [])) alerts += '<div class="alert alert-warning py-2 small mb-2"><i class="bi bi-exclamation-triangle-fill"></i> ' + escHtml(w) + '</div>';
+  document.getElementById('area-alerts').innerHTML = alerts;
+
+  const u = a.usage, us = a.usage_str || {};
+  const bar = document.getElementById('usage-bar');
+  if (u) {
+    const w = Math.max(0, Math.min(100, u.used_pct)).toFixed(1);
+    bar.innerHTML = '<div class="progress" style="height:22px"><div class="progress-bar ' + (BAR_CLASS[state] || 'bg-secondary') +
+      '" style="width:' + w + '%">' + fmtPct(u.used_pct) + '</div></div>';
+  } else {
+    bar.innerHTML = '<span class="text-muted">not measured</span>';
+  }
+  document.getElementById('u-used').textContent = us.used || DASH;
+  document.getElementById('u-free').textContent = us.free || DASH;
+  document.getElementById('u-total').textContent = us.total || DASH;
+  document.getElementById('u-ts').textContent = u && u.ts ? fmtTs(u.ts) + ' (' + fmtAgo(u.ts) + ')' : DASH;
+  document.getElementById('u-atime').textContent = a.atime_mode || DASH;
+  const sc = a.scan || {};
+  document.getElementById('u-scan').textContent = a.last_scan_at ? fmtTs(a.last_scan_at) + ' (' + fmtAgo(a.last_scan_at) + ')' : 'never';
+  document.getElementById('u-next').textContent = a.next_scan_in_s !== null && a.next_scan_in_s !== undefined ? 'in ' + fmtAge(a.next_scan_in_s) : DASH;
+
+  const tiers = a.tiers || {};
+  document.getElementById('sparkline-wrap').innerHTML = sparkline(data.usage_history || [], tiers);
+  document.getElementById('spark-count').textContent = '(' + (data.usage_history || []).length + ' points)';
+
+  const tierNames = ['warning', 'critical', 'full'].filter(n => tiers[n]);
+  if (tierNames.length) {
+    let html = '';
+    for (const n of tierNames) {
+      const t = tiers[n];
+      html += '<tr class="' + (n === a.selected_tier ? 'table-danger' : (t.active ? 'table-warning' : '')) + '">';
+      html += '<td class="ps-3">' + badge(n) + (n === a.selected_tier ? ' <small class="text-muted">selected</small>' : '') + '</td>';
+      html += '<td>' + fmtPct(t.threshold) + '</td><td>' + fmtPct(t.trigger) + '</td><td>' + fmtPct(t.stop) + '</td>';
+      html += '<td>' + escHtml(t.policy) + '</td><td>' + fmtAge(t.min_age) + '</td>';
+      html += '<td>' + (t.active ? '<i class="bi bi-lightning-charge-fill text-warning"></i> yes' : '<span class="text-muted">no</span>') + '</td>';
+      html += '<td class="text-nowrap">' + escHtml(t.bytes_to_stop_str || DASH) + '</td></tr>';
+    }
+    document.getElementById('tbody-tiers').innerHTML = html;
+  }
+
+  const rc = a.reject_counts || {};
+  const keys = Object.keys(rc).sort((x, y) => rc[y] - rc[x]);
+  fillTable('tbody-rejects', keys.length ? keys.map(k => '<tr><td class="ps-3"><code>' + escHtml(k) + '</code></td><td class="text-end pe-3">' + rc[k] + '</td></tr>').join('') : null,
+    2, 'No candidates were rejected in the last scan.');
+  document.getElementById('scan-summary').innerHTML = sc.scan_id
+    ? 'scan <code>' + escHtml(String(sc.scan_id).slice(0, 8)) + '</code>: ' + escHtml(sc.outcome || '') +
+      (sc.reason ? ' (' + escHtml(sc.reason) + ')' : '') + ', ' + (sc.files_seen || 0) + ' files seen, ' +
+      (sc.acted || 0) + ' acted, ' + escHtml(sc.bytes_freed_str || fmtBytes(sc.bytes_freed || 0)) + ' freed, ' +
+      (sc.pass_no || 0) + ' pass(es)' + (sc.duration_s !== null && sc.duration_s !== undefined ? ', ' + Number(sc.duration_s).toFixed(1) + ' s' : '') +
+      (a.scan_errors ? ', <span class="text-danger">' + a.scan_errors + ' scan errors</span>' : '')
+    : 'No scan has completed yet.';
+
+  for (const kind of ['compress', 'delete']) {
+    const q = (a.queues || {})[kind] || {total: 0, shown: 0, entries: []};
+    document.getElementById('q-' + kind + '-count').textContent = '(' + q.total + ' total, showing ' + (q.entries || []).length + ')';
+    fillTable('tbody-q-' + kind, queueRows(kind, q), 8, 'Queue is empty.');
+  }
+
+  apiFetch('/api/v1/history' + qs({area: AREA, limit: 50}))
+    .then(h => fillTable('tbody-history', historyRows(h.events || []), 9, 'No history for this area yet.'))
+    .catch(err => fillTable('tbody-history', null, 9, 'History unavailable: ' + err.message));
+}
+
+startDashboard('/api/v1/areas/' + encodeURIComponent(AREA), renderArea);
+</script>
+{% endblock %}

@@ -1,0 +1,54 @@
+.TH MU2EDAQ-FILE-REAPER-BOOTSTRAP 1 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.SH NAME
+bootstrap.sh \- create or refresh the mu2edaq-file-reaper environment
+.SH SYNOPSIS
+.B ./bootstrap.sh
+[\fB\-\-extras\fR]
+.br
+.B MU2EDAQ_PYTHON=\fIpython3.9\fR ./bootstrap.sh
+.br
+.B powershell -ExecutionPolicy Bypass -File .\\bootstrap.ps1
+[\fB\-Extras\fR]
+.SH DESCRIPTION
+Creates
+.I ./venv
+when it does not exist, installs the runtime and development dependencies
+from
+.IR requirements.txt " and " requirements-dev.txt ,
+installs the package in editable mode (providing the
+.BR mu2edaq-file-reaper " and " mu2edaq-reaper
+console scripts), and then best-effort installs the two Mu2e libraries that
+are not on PyPI:
+.B mu2edaq-discovery
+and
+.BR mu2edaq-notify .
+Each is taken from the sibling checkout in
+.I mu2edaq-main
+when present, otherwise from GitHub; when neither works the reaper runs
+without discovery or phone notifications.  Finally the
+.IR data/ ", " logs/ " and " config/
+directories are created.  Re-running is safe and updates dependencies.
+.PP
+A failure installing the required dependencies or the package itself stops
+the script with a message; the environment is then not usable.
+.SH OPTIONS
+.TP
+.B \-\-extras
+Also install
+.B pyzmq
+(DAQ message channel) and
+.B zstandard
+(zstd compression).
+.SH ENVIRONMENT
+.TP
+.B MU2EDAQ_PYTHON
+Interpreter used to create the virtual environment (default
+.BR python3 ).
+On AlmaLinux 9 the system
+.B python3
+is 3.9, the production target.
+.SH EXIT STATUS
+0 on success; 1 when a required install step fails; 2 for an unknown option.
+.SH SEE ALSO
+.BR mu2edaq-file-reaper-start (1),
+.BR mu2edaq-file-reaper (1)

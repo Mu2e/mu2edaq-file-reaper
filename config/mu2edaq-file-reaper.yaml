@@ -1,0 +1,164 @@
+# mu2edaq-file-reaper.yaml — reference configuration for the Mu2e DAQ file reaper
+#
+# Every setting in "reaper:", "database:", "discovery:" and "api:" can be
+# overridden by an environment variable (MU2EDAQ_FILE_REAPER_WEB_PORT=5010),
+# by a .env file next to this file, and by a command-line flag (--port 5010).
+# Increasing priority:
+#
+#     command line  >  environment  >  .env  >  this file  >  built-in defaults
+#
+# Percentages are PERCENT OF CAPACITY USED, computed the way df(1) does.
+# Durations accept "90s", "10m", "6h", "7d", "2w" or bare seconds.
+#
+# The full schema is in `man 5 mu2edaq-file-reaper.conf`.
+
+reaper:
+  label: null                  # instance label; default = short hostname (one reaper per node)
+  web_host: "0.0.0.0"          # bind address for the web UI and API
+  web_port: 5004               # HTTP port (control room exports CRS_PORT_HTTP)
+  api_port: null               # optional second listener serving only /api/v1
+  scan_interval: 600           # seconds between scans (10 minutes)
+  dry_run: false               # true = plan, publish queues and write history, but never modify files
+  daemon: false                # run detached (POSIX only); the start script sets this
+  pid_file: "./file-reaper.pid"
+  log_file: "./logs/mu2edaq-file-reaper.log"
+  log_max_bytes: 10485760      # rotate the log at 10 MiB ...
+  log_backup_count: 5          # ... keeping 5 old copies
+  admin_token: ""              # secret that unlocks pause/exclude/token pages in the UI.
+                               # Empty => a one-time token is printed at startup.
+                               # Prefer MU2EDAQ_FILE_REAPER_ADMIN_TOKEN or the .env file.
+  workers: 4                   # areas scanned concurrently (areas on one filesystem still serialize)
+  max_passes_per_scan: 3       # re-measure/re-enumerate passes per scan (cascade full -> critical -> warning)
+  remeasure_every: 1           # re-read disk usage after every N actions
+  stall_window: 20             # actions between "is space really being reclaimed?" checks
+  shutdown_grace_s: 30         # wait this long for in-flight actions on SIGTERM
+  queue_publish_limit: 1000    # queue entries shown in the UI / API per area
+  history_log_queue_adds: new_only   # all | new_only | none — how chatty queue_add history is
+  compress_verify: crc         # crc | size | none — verification of each compressed file before the original is removed
+  compress_min_ratio: 0.95     # skip (and remember) files that do not shrink below 95 % of their size
+  compress_assumed_ratio: 0.5  # dry-run estimate of compressed size / original size
+  protected_paths: []          # extra absolute paths that must never be touched
+  allow_shallow_root: false    # allow an area directly under / (e.g. /scratch); normally refused
+
+database:
+  url: "sqlite:///./data/file-reaper.db"   # or postgresql+psycopg://user:password@host/dbname
+  history_retention_days: 365              # audit rows older than this are pruned daily (0 = keep forever)
+
+discovery:
+  enabled: true                # advertise via mu2edaq-discovery (UDP multicast) when the package is installed
+  app: "file-reaper"           # discovery class; every reaper instance shares it
+  name: null                   # default "File Reaper (<label>)"
+
+api:
+  open_read: true              # GET endpoints need no token; every mutating call always needs a bearer token
+
+# ---------------------------------------------------------------------------
+# Defaults inherited by every area.  Any key may be overridden per area.
+# ---------------------------------------------------------------------------
+# Tiers: a tier becomes ACTIVE when used space reaches threshold + high_water and
+# stays active, acting on every scan, until used space is at or below
+# threshold - low_water.  Only the most severe active tier acts on a pass; when
+# its queue empties, the next lower active tier gets a pass (up to max_passes_per_scan).
+#
+# Policies:
+#   LRU-Delete    order by max(atime, mtime), oldest first, delete
+#   Age-Delete    order by mtime, oldest first, delete
+#   LRU-Compress  order by max(atime, mtime), oldest first, compress in place (X -> X.gz)
+#   Age-Compress  order by mtime, oldest first, compress in place
+# min_age applies to the policy's own ordering key.  Compressed files keep the
+# original atime/mtime and remain eligible for later delete tiers.
+defaults:
+  thresholds: {warning: 80, critical: 90, full: 95}
+  tiers:
+    warning:  {policy: LRU-Compress, min_age: "7d", low_water: 10, high_water: 0}
+    critical: {policy: LRU-Delete,   min_age: "3d", low_water: 10, high_water: 0}
+    full:     {policy: Age-Delete,   min_age: "1d", low_water: 10, high_water: 0}
+  include: ["*"]                                  # globs on the area-relative path or basename
+  exclude: ["*.tmp", "*.part", ".~*", "*.pid", "*.db", "*.db-wal", "*.db-shm", "*.db-journal"]
+  settle_seconds: 300                             # never touch a file modified in the last 5 minutes
+  compression:
+    algorithm: gzip                               # gzip | bz2 | xz | zstd (zstd needs `pip install zstandard`)
+    level: 6
+    skip_suffixes: [".gz", ".bz2", ".xz", ".zst", ".zip", ".7z", ".lz4", ".tgz", ".tbz2", ".txz"]
+  prune_empty_dirs: false                         # remove directories left empty by deletions
+  max_actions_per_scan: 0                         # 0 = unlimited
+  check_open_files: false                         # reject files open by another process (/proc scan; Linux, expensive)
+  allow_hardlinks: false                          # files with nlink > 1 free nothing when deleted; skip them
+
+# ---------------------------------------------------------------------------
+# Areas.  Each needs a path; everything else falls back to defaults above.
+# Local paths only — run one reaper per node.
+# ---------------------------------------------------------------------------
+areas:
+  # Raw data on a data-logger node.  The fts_db gate makes a file eligible only
+  # when mu2edaq-fts has marked it COMPLETED (transferred and checksummed) or
+  # DELETED.  If the FTS database cannot be read, nothing is eligible.
+  - path: /data/raw
+    label: "Raw data"
+    fts_db: /home/mu2edaq/mu2edaq-main/mu2edaq-fts/fts_status.db
+    thresholds: {warning: 75, critical: 85, full: 92}
+    tiers:
+      warning:  {policy: LRU-Compress, min_age: "14d"}
+      critical: {policy: LRU-Delete,   min_age: "7d"}
+      full:     {policy: Age-Delete,   min_age: "2d", low_water: 12}
+
+  # Log volume: compress old logs first, delete very old ones under pressure.
+  - path: /daqlogs
+    label: "DAQ logs"
+    include: ["*.log", "*.log.*", "*.txt", "*.out", "*.err"]
+    tiers:
+      warning:  {policy: Age-Compress, min_age: "2d"}
+      critical: {policy: Age-Delete,   min_age: "30d"}
+      full:     {policy: Age-Delete,   min_age: "7d", low_water: 15}
+    prune_empty_dirs: true
+
+  # Scratch: configured but disabled until an operator enables it in the UI.
+  - path: /scratch/mu2e
+    label: "Scratch"
+    enabled: false
+    tiers:
+      warning:  {policy: LRU-Delete, min_age: "30d"}
+      critical: {policy: LRU-Delete, min_age: "7d"}
+      full:     {policy: Age-Delete, min_age: "1d"}
+
+# ---------------------------------------------------------------------------
+# Notifications.  Each channel is independent; min_severity is one of
+# debug < info < warning < error < critical.  Tier activation maps
+# warning -> warning, critical -> error, full -> critical; a policy that cannot
+# clear its tier is error (critical for the full tier).
+# ---------------------------------------------------------------------------
+notifications:
+  rate_limit_seconds: 600      # identical (channel, area, title) suppressed within this window
+  max_per_hour: 0              # per-process cap on sends per rolling hour (0 = unlimited)
+  mu2e_notify:                 # mu2edaq-phone-notification-system (server found via discovery)
+    enabled: true
+    min_severity: warning
+    source: "file-reaper"
+    category: "DAQ"
+    url: null                  # e.g. http://mu2e-mgr-01.fnal.gov:8095 ; MU2EDAQ_NOTIFY_URL also works
+    token: null                # MU2EDAQ_NOTIFY_TOKEN also works
+  daq_messages:                # mu2edaq-dashboard ZMQ PUSH (needs pyzmq)
+    enabled: true
+    min_severity: warning
+    host: "localhost"
+    port: 5555
+    subsystem: "DAQ"
+    event_category: "software"
+  bigredbox:                   # control-room Big Red Box, UDP broadcast — reserve for real emergencies
+    enabled: false
+    min_severity: critical
+    port: 37020
+    system_id: null            # default FILE-REAPER-<LABEL>
+  email:
+    enabled: false
+    min_severity: critical
+    method: smtp               # smtp | mail (uses the mail(1) command)
+    smtp_host: "smtp.fnal.gov"
+    smtp_port: 25
+    starttls: false
+    from: "mu2edaq@fnal.gov"
+    to: []                     # e.g. ["mu2e-daq-ops@fnal.gov"]; Slack-by-email addresses work too
+  slack:
+    enabled: false
+    min_severity: warning
+    webhook_url: null          # https://hooks.slack.com/services/T000/B000/XXXX

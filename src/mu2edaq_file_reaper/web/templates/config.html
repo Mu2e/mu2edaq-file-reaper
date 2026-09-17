@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block content %}
+
+{% if issues %}
+<div class="alert alert-warning">
+  <strong><i class="bi bi-exclamation-triangle-fill"></i> {{ issues | length }} configuration problem(s)</strong>
+  <ul class="mb-0 mt-2 small">
+    {% for issue in issues %}<li>{{ issue }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card mb-4 h-100">
+      <div class="card-header"><i class="bi bi-gear"></i> Server settings</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr><th class="ps-3" style="width:36%">Config file</th>
+                <td><code class="small">{{ settings.config_path or '(defaults — no config file loaded)' }}</code></td></tr>
+            <tr><th class="ps-3">.env file</th>
+                <td><code class="small">{{ settings.env_file or '(none)' }}</code></td></tr>
+            <tr><th class="ps-3">Label</th><td>{{ settings.label }}</td></tr>
+            <tr><th class="ps-3">Web bind</th><td><code>{{ settings.web_host }}:{{ settings.web_port }}</code></td></tr>
+            <tr><th class="ps-3">API port</th>
+                <td>{% if settings.api_port %}<code>{{ settings.api_port }}</code> <small class="text-muted">(dedicated, /api only)</small>
+                    {% else %}<span class="text-muted">same as web port</span>{% endif %}</td></tr>
+            <tr><th class="ps-3">Scan interval</th>
+                <td>{{ fmt_duration(settings.scan_interval) }} <small class="text-muted">({{ settings.scan_interval }}&nbsp;s)</small></td></tr>
+            <tr><th class="ps-3">Dry run</th>
+                <td>{% if settings.dry_run %}<span class="badge bg-warning text-dark">DRY RUN</span>{% else %}<span class="badge bg-secondary">off</span>{% endif %}</td></tr>
+            <tr><th class="ps-3">Workers</th><td>{{ settings.workers }}</td></tr>
+            <tr><th class="ps-3">Max passes / scan</th><td>{{ settings.max_passes_per_scan }}</td></tr>
+            <tr><th class="ps-3">Re-measure every</th><td>{{ settings.remeasure_every }} action(s)</td></tr>
+            <tr><th class="ps-3">Stall window</th><td>{{ settings.stall_window }} action(s)</td></tr>
+            <tr><th class="ps-3">Queue publish limit</th><td>{{ settings.queue_publish_limit }} entries / queue</td></tr>
+            <tr><th class="ps-3">History: queue adds</th><td><code>{{ settings.history_log_queue_adds }}</code></td></tr>
+            <tr><th class="ps-3">Compress verify</th><td><code>{{ settings.compress_verify }}</code>, min ratio {{ settings.compress_min_ratio }}, assumed {{ settings.compress_assumed_ratio }}</td></tr>
+            <tr><th class="ps-3">Protected paths</th>
+                <td class="small">{% if settings.protected_paths %}{{ settings.protected_paths | join(', ') }}{% else %}<span class="text-muted">(none beyond the built-in system roots)</span>{% endif %}</td></tr>
+            <tr><th class="ps-3">Allow shallow root</th><td>{{ m.yes_no(settings.allow_shallow_root) }}</td></tr>
+            <tr><th class="ps-3">Daemon</th><td>{{ m.yes_no(settings.daemon, 'enabled', 'foreground') }}</td></tr>
+            <tr><th class="ps-3">PID / log file</th>
+                <td class="small"><code>{{ settings.pid_file or '(none)' }}</code> / <code>{{ settings.log_file or '(stderr)' }}</code></td></tr>
+            <tr><th class="ps-3">Database</th><td><code class="small">{{ scalars.database_url }}</code></td></tr>
+            <tr><th class="ps-3">History retention</th><td>{{ settings.history_retention_days }} days</td></tr>
+            <tr><th class="ps-3">Admin token</th><td>{% if settings.admin_token %}<span class="badge bg-success">configured</span>{% else %}<span class="badge bg-secondary">not set</span>{% endif %}</td></tr>
+            <tr><th class="ps-3">Open read API</th><td>{{ m.yes_no(settings.api_open_read, 'open', 'token required') }}</td></tr>
+            <tr><th class="ps-3">Discovery</th>
+                <td>{{ m.yes_no(settings.discovery_enabled) }} <small class="text-muted">app {{ settings.discovery_app }}{% if settings.discovery_name %}, name {{ settings.discovery_name }}{% endif %}</small></td></tr>
+            {% if settings.fake_usage_file %}
+            <tr><th class="ps-3">Fake usage file</th><td><code class="small">{{ settings.fake_usage_file }}</code> <span class="badge bg-warning text-dark">test hook</span></td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer text-muted small">
+        Precedence: command line &gt; environment (<code>{{ env_prefix }}*</code>) &gt; .env &gt; config file &gt; built-in defaults.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card mb-4 h-100">
+      <div class="card-header"><i class="bi bi-bell"></i> Notification channels <small class="text-muted ms-1">(secrets redacted)</small></div>
+      <div class="card-body p-0">
+        {% if notifications %}
+        <table class="table table-sm mb-0">
+          <thead class="table-light"><tr><th class="ps-3">Channel</th><th>Settings</th></tr></thead>
+          <tbody>
+            {% for cname, ccfg in notifications.items() %}
+            <tr>
+              <td class="ps-3"><strong>{{ cname }}</strong></td>
+              <td class="small">
+                {% if ccfg is mapping %}
+                  {% for k, v in ccfg.items() %}<div><span class="text-muted">{{ k }}:</span> <code>{{ v }}</code></div>{% endfor %}
+                {% else %}<code>{{ ccfg }}</code>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted small p-3 mb-0">No <code>notifications:</code> block configured.</p>
+        {% endif %}
+      </div>
+      <div class="card-footer text-muted small">
+        Live channel status (enabled / disabled reason / last sent) is on the
+        <a href="{{ url_for('views.notifications') }}">Notifications</a> page.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">
+    <i class="bi bi-hdd-stack"></i> Areas
+    <small class="text-muted ms-2">{{ areas | length }} configured</small>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0 align-middle">
+        <thead class="table-light">
+          <tr><th class="ps-3">Label / Path</th><th>Tiers <small class="text-muted fw-normal">(threshold / policy / min age / water marks)</small></th>
+              <th>Filters</th><th>Compression</th><th>Options</th></tr>
+        </thead>
+        <tbody>
+          {% for a in areas %}
+          <tr>
+            <td class="ps-3">
+              <a class="area-link" href="{{ url_for('views.area', name=a.name) }}">{{ m.path_cell(a) }}</a>
+              <div class="small text-muted">name <code>{{ a.name }}</code>{% if a.real_path != a.path %} &rarr; <code>{{ a.real_path }}</code>{% endif %}</div>
+              {% if not a.enabled %}<span class="badge bg-secondary">disabled</span>{% endif %}
+              {% if a.dry_run %}<span class="badge bg-warning text-dark">dry-run</span>{% endif %}
+              {% for err in a.config_errors %}
+              <div class="text-danger small"><i class="bi bi-exclamation-triangle-fill"></i> {{ err }}</div>
+              {% endfor %}
+            </td>
+            <td class="limit-cell">
+              {% for tname in ['warning', 'critical', 'full'] if tname in a.tiers %}
+              {% set t = a.tiers[tname] %}
+              <div><span class="lvl">{{ tname }}</span> {{ fmt_pct(t.threshold) }} &middot; {{ t.policy }} &middot; {{ fmt_duration(t.min_age) }}
+                <span class="text-muted">(+{{ t.high_water }} / &minus;{{ t.low_water }}{% if t.compressor %}, {{ t.compressor }}{% endif %})</span></div>
+              {% else %}
+              <span class="text-muted">monitor only</span>
+              {% endfor %}
+            </td>
+            <td class="small">
+              <div><span class="text-muted">include:</span> <code>{{ a.include | join(' ') }}</code></div>
+              <div><span class="text-muted">exclude:</span> <code>{{ a.exclude | join(' ') }}</code></div>
+              {% if a.fts_db %}<div><span class="text-muted">fts_db:</span> <code>{{ a.fts_db }}</code></div>{% endif %}
+            </td>
+            <td class="small text-nowrap">{{ a.compressor }} level {{ a.compress_level }}<br>
+              <span class="text-muted">skip {{ a.skip_suffixes | join(' ') }}</span></td>
+            <td class="small">
+              settle {{ fmt_duration(a.settle_seconds) }}<br>
+              {% if a.max_actions_per_scan %}max {{ a.max_actions_per_scan }} actions/scan<br>{% endif %}
+              {% if a.prune_empty_dirs %}prune empty dirs<br>{% endif %}
+              {% if a.check_open_files %}check open files<br>{% endif %}
+              {% if a.allow_hardlinks %}allow hardlinks{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-muted p-3">No areas configured. Add entries under <code>areas:</code> in the YAML config file.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if raw_yaml is not none %}
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-file-code"></i> Raw configuration
+      <small class="text-muted ms-2">{{ settings.config_path }}</small>
+    </span>
+    <button class="btn btn-sm btn-outline-secondary" id="copy-btn" onclick="copyYaml()">
+      <i class="bi bi-clipboard"></i> Copy
+    </button>
+  </div>
+  <div class="card-body p-0">
+    <pre id="yaml-pre" class="mb-0 p-3"
+         style="background:#f8f9fa;border-radius:0 0 .375rem .375rem;font-size:.85em;overflow-x:auto">{{ raw_yaml }}</pre>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyYaml() {
+  const el = document.getElementById('yaml-pre');
+  const btn = document.getElementById('copy-btn');
+  const fallback = () => {
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(r);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(el.textContent).then(() => {
+      btn.innerHTML = '<i class="bi bi-clipboard-check"></i> Copied!';
+      setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i> Copy'; }, 2000);
+    }).catch(fallback);
+  } else {
+    fallback();
+  }
+}
+</script>
+{% endblock %}
