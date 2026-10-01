@@ -12,10 +12,22 @@ Changes that alter behaviour an operator or an integration depends on are
 called out as **Breaking** or **Compatibility**; anything not so marked is
 additive.
 
-## [Unreleased] - 0.1.0
+## [Unreleased]
 
-First version. Not yet tagged; the first repository tag will follow the
-`tNN.NN.NN` convention (proposed `t00.01.00-rc`).
+### Changed
+
+- `PROJECT-STATUS.md` and `docs/PROJECT-STATUS.html` record the 2026-10-01
+  full run (199 passed), the public GitHub repository
+  `Mu2e/mu2edaq-file-reaper`, and phase 8 (registration) as in progress.
+- This changelog's first release heading now names the tag it shipped as.
+  Documentation only; no code or behaviour change.
+
+## [t00.01.00] - 0.1.0 - 2026-09-17
+
+First version, tagged `t00.01.00` on commit `42aabbc`. The tagged tree still
+carries the pre-release heading `[Unreleased] - 0.1.0` with a proposed
+`t00.01.00-rc`; the release was tagged final and this heading was corrected
+afterwards.
 
 ### Added
 

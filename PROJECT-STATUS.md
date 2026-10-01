@@ -1,6 +1,7 @@
 # mu2edaq-file-reaper project status
 
-Code version 0.1.0 (unreleased). Updated 2026-09-11.
+Code version 0.1.0, released as repository tag `t00.01.00` (2026-09-17, commit 42aabbc; CHANGELOG `[t00.01.00] - 0.1.0`). Updated 2026-10-01.
+Repository: https://github.com/Mu2e/mu2edaq-file-reaper (public).
 Live tracker: docs/PROJECT-STATUS.html (published as a Claude artifact).
 
 ## Phases
@@ -14,9 +15,11 @@ Live tracker: docs/PROJECT-STATUS.html (published as a Claude artifact).
 | 5 Web | Flask factory, admin session + CSRF, scoped bearer tokens, REST API v1, 16 templates, JS/CSS | done | verified with the test client (see Test matrix) |
 | 6 CLI | mu2edaq-reaper: 17 commands, token cache 0600, discovery lookup | done | 27 tests against a live Werkzeug server |
 | 7 Docs | README, CHANGELOG, CLAUDE.md, INSTALL, DESIGN, man pages (1/3/5/7), demo tool | done | all man pages carry the code version (test-enforced) |
-| 8 Registration | GitHub repo Mu2e/mu2edaq-file-reaper, submodule, testing/common.sh, apps.yaml (5004), mu2edaq-config | pending | to be done once the suite is green |
+| 8 Registration | GitHub repo Mu2e/mu2edaq-file-reaper, submodule, testing/common.sh, apps.yaml (5004), mu2edaq-config | in progress | GitHub repo created and pushed 2026-10-01 (main, mu2e-sept-mega-review, t00.01.00); mu2edaq-main submodule, testing manifest, apps.yaml and mu2edaq-config pending |
 
 ## Test matrix
+
+Last full run 2026-10-01, macOS arm64, Python 3.12.1: 199 passed, 0 failed (57.7 s).
 
 | Suite | Covers | Status |
 |---|---|---|
@@ -29,14 +32,14 @@ Live tracker: docs/PROJECT-STATUS.html (published as a Claude artifact).
 | test_scheduler | restore state, pause/resume/disable/enable, run_now, tick/stop, no overlapping scans | passing |
 | test_db, test_auth, test_ratelimit, test_notify | WAL pragma, four concurrent writers, history filters and prune, token lifecycle; hashing and scopes; dedup; fan-out and payload shapes | passing |
 | test_cli | token cache permissions, config precedence, end-to-end CLI against a live server | passing |
-| test_web | every page and API route, 401/403/CSRF paths, token lifecycle | written, pending run |
-| test_scripts, test_packaging | start/stop scripts against real processes; man page versions; changelog heading; nav endpoints; 3.9 syntax | passing / pending rerun after docs |
+| test_web | every page and API route, 401/403/CSRF paths, token lifecycle | passing (9) |
+| test_scripts, test_packaging | start/stop scripts against real processes; man page versions; changelog heading; nav endpoints; 3.9 syntax | passing (5 + 8) |
 
 ## Platform compatibility
 
 | Platform | Python | Bootstrap | pytest | Daemon mode | Notes |
 |---|---|---|---|---|---|
-| macOS 15 arm64 (development) | 3.12 | ok | passing | fork | primary development host |
+| macOS arm64 (development) | 3.12.1 | ok | 199 / 199 (2026-10-01) | fork | primary development host |
 | AlmaLinux 9 (mu2e-mgr-01, mu2e-dl-01) | 3.9.21 | pending | pending | fork | production target; Optional[X] typing enforced by test |
 | Windows 11 | 3.9+ | pending | pending | foreground only | bootstrap.ps1, start .ps1 |
 
@@ -56,6 +59,7 @@ Live tracker: docs/PROJECT-STATUS.html (published as a Claude artifact).
 ## Open items
 
 - The four design questions (thresholds, default policies, FTS guard, UI auth) were answered with the recommended option because no reply arrived during planning. Each is a configuration or small code change if a different choice is wanted.
-- Registration in mu2edaq-main (submodule, testing manifest, apps.yaml, mu2edaq-config) and the GitHub repository are still to be done.
+- Registration in mu2edaq-main (submodule, testing manifest, apps.yaml, mu2edaq-config) is still to be done. The GitHub repository exists as of 2026-10-01.
+- `python3.9` is not installed on the development host, so the AL9 typing check (`python3.9 -W error -c "import mu2edaq_file_reaper"`) has only been covered by the syntax test in test_packaging.
 - AlmaLinux 9 and Windows 11 runs of bootstrap and pytest have not been performed yet.
 - SSO for the UI, Alembic migrations and remote (SSH) areas are future work.
