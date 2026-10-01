@@ -56,18 +56,18 @@ ul{margin:0;padding-left:20px} li{margin:2px 0}
     <h1>File Reaper Build Tracker</h1>
   </div>
   <div class="meta">
-    <span>version 0.1.0 (unreleased)</span>
-    <span>updated 2026-09-11 · phases 1–7 written, final verification and registration pending</span>
+    <span>version 0.1.0 · tag t00.01.00</span>
+    <span>updated 2026-10-01 · phases 1–7 done, registration in progress</span>
     <span>target AlmaLinux 9 / Python 3.9</span>
   </div>
 </header>
 
 <section>
   <div class="summary">
-    <div class="tile"><div class="n">7 / 8</div><div class="l">phases complete</div><div class="bar"><span style="width:88%"></span></div></div>
-    <div class="tile"><div class="n">182</div><div class="l">tests passing at last run (engine, db, notify, scripts, CLI); web suite written, run pending</div></div>
+    <div class="tile"><div class="n">7 / 8</div><div class="l">phases complete · phase 8 in progress</div><div class="bar"><span style="width:92%"></span></div></div>
+    <div class="tile"><div class="n">199 / 199</div><div class="l">tests passing · 2026-10-01 · macOS, Python 3.12.1</div></div>
     <div class="tile"><div class="n">36</div><div class="l">source modules · 16 templates · 8 man pages</div></div>
-    <div class="tile"><div class="n">not yet</div><div class="l">GitHub repo Mu2e/mu2edaq-file-reaper</div></div>
+    <div class="tile"><div class="n">public</div><div class="l">github.com/Mu2e/mu2edaq-file-reaper</div></div>
   </div>
 </section>
 
@@ -80,10 +80,10 @@ ul{margin:0;padding-left:20px} li{margin:2px 0}
       <tr><td>2 Database</td><td>SQLAlchemy models, SQLite WAL / Postgres, history · tokens · exclusions · area_state repos</td><td><span class="chip done">done</span></td><td>SQLAlchemy 2 models, WAL pragmas, five repositories</td></tr>
       <tr><td>3 Engine</td><td>usage, eligibility, FTS gate, policies, scanner, atomic actions, reaper orchestrator, scheduler</td><td><span class="chip done">done</span></td><td>hysteresis, cascade, FTS gate, atomic actions, scheduler; 21 orchestration tests</td></tr>
       <tr><td>4 Notifications</td><td>mu2e notify, DAQ ZMQ messages, Big Red Box, email, Slack, rate limiter</td><td><span class="chip done">done</span></td><td>five channels, dedup with retry on failure, notification log</td></tr>
-      <tr><td>5 Web</td><td>Flask factory, admin session + bearer auth, pages, REST API v1, templates, JS</td><td><span class="chip done">done</span></td><td>12 pages, 16 templates, reaper.js/css; every route exercised by test_web (run pending)</td></tr>
+      <tr><td>5 Web</td><td>Flask factory, admin session + bearer auth, pages, REST API v1, templates, JS</td><td><span class="chip done">done</span></td><td>12 pages, 16 templates, reaper.js/css; every route exercised by test_web (passing)</td></tr>
       <tr><td>6 CLI</td><td>mu2edaq-reaper subcommands, token cache, discovery lookup</td><td><span class="chip done">done</span></td><td>17 commands; 27 tests against a live Werkzeug server</td></tr>
       <tr><td>7 Docs</td><td>README, CHANGELOG, CLAUDE.md, INSTALL, DESIGN, man pages (1/3/5/7), dl-01 host config</td><td><span class="chip done">done</span></td><td>plus PROJECT-STATUS.md and tools/make_demo_tree.py</td></tr>
-      <tr><td>8 Registration</td><td>GitHub repo, submodule, testing/common.sh, apps.yaml port 5004, mu2edaq-config</td><td><span class="chip todo">pending</span></td><td>waiting on shell access (safety classifier outage)</td></tr>
+      <tr><td>8 Registration</td><td>GitHub repo, submodule, testing/common.sh, apps.yaml port 5004, mu2edaq-config</td><td><span class="chip prog">in progress</span></td><td>GitHub repo created and pushed 2026-10-01; submodule, testing manifest, apps.yaml, mu2edaq-config pending</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -108,6 +108,7 @@ ul{margin:0;padding-left:20px} li{margin:2px 0}
 
 <section>
   <h2>Test matrix</h2>
+  <p class="note">Last full run 2026-10-01 on macOS arm64, Python 3.12.1: 199 passed, 0 failed in 57.7 s.</p>
   <div class="scroll"><table>
     <thead><tr><th>Suite</th><th>Covers</th><th>Status</th></tr></thead>
     <tbody>
@@ -117,8 +118,8 @@ ul{margin:0;padding-left:20px} li{margin:2px 0}
       <tr><td class="mono">test_reaper, test_scheduler</td><td>single tier to low water; hysteresis across scans; cascade; pause and exclude mid-queue; shutdown</td><td><span class="chip done">passing</span></td></tr>
       <tr><td class="mono">test_db, test_auth, test_notify</td><td>WAL pragma; concurrent writers; token lifecycle; channel payload shapes</td><td><span class="chip done">passing</span></td></tr>
       <tr><td class="mono">test_cli</td><td>token cache permissions; config precedence; CLI end to end against a live server</td><td><span class="chip done">27 passing</span></td></tr>
-      <tr><td class="mono">test_web</td><td>every page and API route; 401/403/CSRF paths; token lifecycle and scopes</td><td><span class="chip part">written, run pending</span></td></tr>
-      <tr><td class="mono">test_scripts, test_packaging</td><td>start/stop scripts against real processes; man page versions; nav endpoints; 3.9 syntax</td><td><span class="chip part">scripts passing, packaging rerun pending</span></td></tr>
+      <tr><td class="mono">test_web</td><td>every page and API route; 401/403/CSRF paths; token lifecycle and scopes</td><td><span class="chip done">9 passing</span></td></tr>
+      <tr><td class="mono">test_scripts, test_packaging</td><td>start/stop scripts against real processes; man page versions; nav endpoints; 3.9 syntax</td><td><span class="chip done">5 + 8 passing</span></td></tr>
     </tbody>
   </table></div>
 </section>
@@ -128,7 +129,7 @@ ul{margin:0;padding-left:20px} li{margin:2px 0}
   <div class="scroll"><table>
     <thead><tr><th>Platform</th><th>Python</th><th>Bootstrap</th><th>pytest</th><th>Daemon mode</th><th>Notes</th></tr></thead>
     <tbody>
-      <tr><td>macOS 15 arm64 (dev)</td><td class="mono">3.12</td><td><span class="chip done">ok</span></td><td><span class="chip done">155 pass</span></td><td>fork</td><td>primary development host</td></tr>
+      <tr><td>macOS arm64 (dev)</td><td class="mono">3.12.1</td><td><span class="chip done">ok</span></td><td><span class="chip done">199 pass</span></td><td>fork</td><td>primary development host</td></tr>
       <tr><td>AlmaLinux 9 (mu2e-mgr-01, dl-01)</td><td class="mono">3.9.21</td><td><span class="chip todo">pending</span></td><td><span class="chip todo">pending</span></td><td>fork</td><td>production; Optional[X] typing only</td></tr>
       <tr><td>Windows 11</td><td class="mono">3.9+</td><td><span class="chip todo">pending</span></td><td><span class="chip todo">pending</span></td><td>foreground only</td><td>bootstrap.ps1 / start .ps1</td></tr>
     </tbody>
@@ -151,5 +152,15 @@ ul{margin:0;padding-left:20px} li{margin:2px 0}
     </tbody>
   </table></div>
   <p class="note">The four design questions (thresholds, default policies, FTS guard, UI auth) were answered with the recommended option because no reply arrived within the planning window. Each is a config or small code change if you want a different choice.</p>
+</section>
+
+<section>
+  <h2>Open items</h2>
+  <ul>
+    <li>Register in mu2edaq-main: submodule, testing/common.sh manifest, apps.yaml (port 5004), mu2edaq-config.</li>
+    <li>Run bootstrap and pytest on AlmaLinux 9 (Python 3.9.21) and Windows 11.</li>
+    <li>CHANGELOG still heads the release <span class="mono">[Unreleased] - 0.1.0</span> (proposed <span class="mono">t00.01.00-rc</span>) while tag <span class="mono">t00.01.00</span> exists on 42aabbc; reconcile.</li>
+    <li>Future: Fermilab / Google SSO for the UI, Alembic migrations, remote (SSH) areas.</li>
+  </ul>
 </section>
 </div>
