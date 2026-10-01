@@ -1,6 +1,6 @@
 # mu2edaq-file-reaper project status
 
-Code version 0.1.0. Repository tag `t00.01.00` (2026-09-17, commit 42aabbc). Updated 2026-10-01.
+Code version 0.1.0, released as repository tag `t00.01.00` (2026-09-17, commit 42aabbc; CHANGELOG `[t00.01.00] - 0.1.0`). Updated 2026-10-01.
 Repository: https://github.com/Mu2e/mu2edaq-file-reaper (public).
 Live tracker: docs/PROJECT-STATUS.html (published as a Claude artifact).
 
@@ -60,7 +60,6 @@ Last full run 2026-10-01, macOS arm64, Python 3.12.1: 199 passed, 0 failed (57.7
 
 - The four design questions (thresholds, default policies, FTS guard, UI auth) were answered with the recommended option because no reply arrived during planning. Each is a configuration or small code change if a different choice is wanted.
 - Registration in mu2edaq-main (submodule, testing manifest, apps.yaml, mu2edaq-config) is still to be done. The GitHub repository exists as of 2026-10-01.
-- `CHANGELOG.md` still heads the release `[Unreleased] - 0.1.0` with a proposed tag `t00.01.00-rc`, while the tag `t00.01.00` exists on 42aabbc. Either convert the heading to `[0.1.0] - t00.01.00 - 2026-09-17` or retag as `-rc`.
 - `python3.9` is not installed on the development host, so the AL9 typing check (`python3.9 -W error -c "import mu2edaq_file_reaper"`) has only been covered by the syntax test in test_packaging.
 - AlmaLinux 9 and Windows 11 runs of bootstrap and pytest have not been performed yet.
 - SSO for the UI, Alembic migrations and remote (SSH) areas are future work.
