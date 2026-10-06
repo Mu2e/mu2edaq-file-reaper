@@ -1,0 +1,278 @@
+schema: mega-review/1
+package: mu2edaq-file-reaper
+tier: A
+group: data-movement
+repo:
+  url: git@github.com:Mu2e/mu2edaq-file-reaper.git
+  exists: true
+  issues_enabled: true
+doc_dir: docs
+summary: >
+  Policy-driven disk cleanup daemon that measures configured DAQ disk areas, alarms at
+  warning/critical/full tiers, and compresses or deletes files in LRU or age order (raw
+  data gated on mu2edaq-fts transfer status) down to a low-water mark, with an audit
+  history, web UI, REST API and CLI
+languages: [python, bash, powershell]
+loc: 9980                      # tracked *.py including tests; shell and PowerShell not counted
+
+runtime:
+  executables:
+    - name: mu2edaq-file-reaper
+      kind: daemon
+      man_page: man/man1/mu2edaq-file-reaper.1
+      note: "console script, pyproject.toml [project.scripts]; also python -m mu2edaq_file_reaper"
+    - name: file_reaper.py
+      kind: daemon
+      man_page: man/man1/mu2edaq-file-reaper.1
+      note: "entry-point shim the start script execs (start-mu2edaq-file-reaper.sh:92)"
+    - name: mu2edaq-reaper
+      kind: cli
+      man_page: man/man1/mu2edaq-reaper.1
+    - name: start-mu2edaq-file-reaper.sh
+      kind: script
+      man_page: man/man1/mu2edaq-file-reaper-start.1
+    - name: stop-mu2edaq-file-reaper.sh
+      kind: script
+      man_page: man/man1/mu2edaq-file-reaper-stop.1
+    - name: bootstrap.sh
+      kind: script
+      man_page: man/man1/mu2edaq-file-reaper-bootstrap.1
+    - name: bootstrap.ps1
+      kind: script
+      man_page: man/man1/mu2edaq-file-reaper-bootstrap.1
+    - name: tools/make_demo_tree.py
+      kind: script
+      man_page: man/man1/make_demo_tree.1
+    - name: mu2edaq_file_reaper
+      kind: library
+      man_page: man/man3/mu2edaq_file_reaper.3
+      note: "Python package; mu2edaq_reaper_cli (client library) is covered by the same page"
+    - name: start_file_reaper.sh
+      kind: script
+      waiver: "git symlink (mode 120000) to start-mu2edaq-file-reaper.sh; covered by that page"
+    - name: stop_file_reaper.sh
+      kind: script
+      waiver: "git symlink (mode 120000) to stop-mu2edaq-file-reaper.sh; covered by that page"
+    - name: start-mu2edaq-file-reaper.ps1
+      kind: script
+      waiver: "Windows foreground launcher; no man page (FR-016 k)"
+    - name: stop-mu2edaq-file-reaper.ps1
+      kind: script
+      waiver: "Windows stop script; no man page (FR-016 k)"
+    - name: lib/file-reaper-proc.sh
+      kind: library
+      waiver: "sourced by the start and stop scripts, never executed; described in README 'Start and stop'"
+  services: []
+  ports:
+    - {port: 5004, proto: tcp, role: web-ui-and-api, source: "start-mu2edaq-file-reaper.sh:20"}
+    - {port: 5004, proto: tcp, role: web-ui-code-default, source: "src/mu2edaq_file_reaper/settings.py:73"}
+    - {port: 5004, proto: tcp, role: web-ui-config, source: "config/mu2edaq-file-reaper.yaml:18"}
+    - {port: 28999, proto: udp, role: discovery-responder, source: "src/mu2edaq_file_reaper/discovery.py:30"}
+  config_files:
+    - config/mu2edaq-file-reaper.yaml
+    - config/mu2e-file-reaper-dl-01.yaml
+    - config/mu2edaq-file-reaper-test.yaml
+    - config/sandbox.yaml
+    - config/.env.example
+  env_vars:
+    - MU2EDAQ_FILE_REAPER_CONFIG
+    - MU2EDAQ_FILE_REAPER_ENV_FILE
+    - MU2EDAQ_FILE_REAPER_LABEL
+    - MU2EDAQ_FILE_REAPER_WEB_HOST
+    - MU2EDAQ_FILE_REAPER_WEB_PORT
+    - MU2EDAQ_FILE_REAPER_API_PORT
+    - MU2EDAQ_FILE_REAPER_SCAN_INTERVAL
+    - MU2EDAQ_FILE_REAPER_DRY_RUN
+    - MU2EDAQ_FILE_REAPER_DAEMON
+    - MU2EDAQ_FILE_REAPER_PID_FILE
+    - MU2EDAQ_FILE_REAPER_LOG_FILE
+    - MU2EDAQ_FILE_REAPER_VERBOSE
+    - MU2EDAQ_FILE_REAPER_ADMIN_TOKEN
+    - MU2EDAQ_FILE_REAPER_WORKERS
+    - MU2EDAQ_FILE_REAPER_DATABASE_URL
+    - MU2EDAQ_FILE_REAPER_OPEN_READ
+    - MU2EDAQ_FILE_REAPER_DISCOVERY
+    - MU2EDAQ_FILE_REAPER_SECRET_KEY
+    - MU2EDAQ_NOTIFY_URL
+    - MU2EDAQ_NOTIFY_TOKEN
+    - MU2EDAQ_NOTIFY_FALLBACK_URL
+    - MU2EDAQ_NOTIFY_CATEGORY
+    - MU2EDAQ_REAPER_URL
+    - MU2EDAQ_REAPER_INSTANCE
+    - MU2EDAQ_REAPER_TOKEN
+    - MU2EDAQ_REAPER_ADMIN_TOKEN
+    - MU2EDAQ_REAPER_TIMEOUT
+    - MU2EDAQ_REAPER_CONFIG
+    - MU2EDAQ_REAPER_TOKEN_FILE
+    - CRS_PORT_HTTP
+    - CRS_STOP_TIMEOUT
+    - FR_DRY_RUN
+    - MU2EDAQ_PYTHON
+
+interactions:
+  depends_on:
+    - package: mu2edaq-fts
+      via: sqlite-read
+      direction: out
+      evidence: "src/mu2edaq_file_reaper/fts_gate.py:56"
+      note: "files table, mode=ro, status IN (COMPLETED, DELETED), path match only; delete gate"
+    - package: mu2edaq-discovery
+      via: import
+      direction: out
+      optional: true
+      evidence: "src/mu2edaq_file_reaper/discovery.py:21"
+      note: "Responder app=file-reaper, all meta values str; CLI discover() at src/mu2edaq_reaper_cli/config.py:201"
+    - package: mu2edaq-phone-notification-system
+      via: import
+      direction: out
+      optional: true
+      evidence: "src/mu2edaq_file_reaper/notify/channels.py:65"
+      note: "mu2edaq_notify.NotifyPublisher"
+    - package: mu2edaq-phone-notification-system
+      via: http
+      direction: out
+      evidence: "src/mu2edaq_file_reaper/notify/channels.py:79"
+      note: "POST <url>/api/events; server port 8095 is the server's own config; URL from config, MU2EDAQ_NOTIFY_URL or discovery app=notify"
+    - package: mu2edaq-dashboard
+      via: zmq
+      direction: out
+      evidence: "src/mu2edaq_file_reaper/notify/channels.py:107"
+      note: "PUSH connect tcp://host:5555 (channels.py:111) to the dashboard's PULL bind; SNDTIMEO 1000, SNDHWM 100, no IMMEDIATE"
+    - package: mu2edaq-bigredbox
+      via: udp
+      direction: out
+      evidence: "src/mu2edaq_file_reaper/notify/channels.py:160"
+      note: "broadcast 255.255.255.255:37020, off by default; prefers daq_alert.send_alert (channels.py:149), whose call is broken (FR-011)"
+  depended_on_by: []
+  external: [smtp, slack-webhook, mail]
+
+quality:
+  tests: {present: true, framework: pytest, count: 199}
+  ci: {present: false, workflows: []}
+  license: MIT
+  artifacts_clean: true
+
+findings:
+  - id: FR-001
+    severity: S2
+    type: bug
+    title: "[fts-gate] eligibility keys on path alone, so a new file at a previously shipped path is deletable"
+    issue: pending
+    fingerprint: 87e72aad
+  - id: FR-002
+    severity: S2
+    type: bug
+    title: "[fts-gate] COMPLETED rows whose remote checksum mismatched or was never compared are deletable"
+    issue: pending
+    fingerprint: 1883f984
+  - id: FR-003
+    severity: S2
+    type: bug
+    title: "[web] /config is unauthenticated and prints the raw YAML, undoing secret redaction"
+    issue: pending
+    fingerprint: cbd85439
+  - id: FR-004
+    severity: S2
+    type: bug
+    title: "[exclusions] regex-kind and non-canonical-path exclusions silently protect nothing"
+    issue: pending
+    fingerprint: 6d69c110
+  - id: FR-005
+    severity: S3
+    type: bug
+    title: "[config] system-root refusal is exact-match only; /usr/lib, /var/lib or /home/<user> are accepted as areas"
+    issue: pending
+    fingerprint: 2a52d439
+  - id: FR-006
+    severity: S3
+    type: bug
+    title: "[config] nested areas and same-device bind mounts let one area's policy reach another area's files"
+    issue: pending
+    fingerprint: 53c93e40
+  - id: FR-007
+    severity: S3
+    type: bug
+    title: "[config] dl-01 gates two areas on one FTS database, but FTS records only the top level of one directory"
+    issue: pending
+    fingerprint: 925f4d16
+  - id: FR-008
+    severity: S3
+    type: bug
+    title: "[config] the start script's default config runs live (dry_run: false) against production paths"
+    issue: pending
+    fingerprint: 22c4bb2f
+  - id: FR-009
+    severity: S3
+    type: bug
+    title: "[logging] daemon mode installs no log handler: INFO dropped, no timestamps, no rotation"
+    issue: pending
+    fingerprint: de9732ec
+  - id: FR-010
+    severity: S3
+    type: bug
+    title: "[auth] the bootstrap admin token is written to a world-readable log on every start"
+    issue: pending
+    fingerprint: 2d27b2ed
+  - id: FR-011
+    severity: S3
+    type: bug
+    title: "[notify] Big Red Box channel fails on every send whenever daq_alert is installed"
+    issue: pending
+    fingerprint: b84df732
+  - id: FR-012
+    severity: S3
+    type: bug
+    title: "[config] MU2EDAQ_NOTIFY_TOKEN in .env never reaches the phone-notification publisher"
+    issue: pending
+    fingerprint: 841022a1
+  - id: FR-013
+    severity: S3
+    type: enhancement
+    title: "[ci] 199 tests and no CI workflow"
+    issue: pending
+    fingerprint: 35047b31
+  - id: FR-014
+    severity: S4
+    type: bug
+    title: "[engine] a failed mid-pass usage measurement reuses the stale sample and keeps acting"
+    issue: pending
+    fingerprint: a8e7cfe7
+  - id: FR-015
+    severity: S4
+    type: bug
+    title: "[scripts] running-copy matcher signals any same-user process naming the package and python"
+    issue: pending
+    fingerprint: 2089f155
+  - id: FR-016
+    severity: S4
+    type: documentation
+    title: "[hygiene] minor findings from the 2026-10 review (rollup)"
+    issue: pending
+    fingerprint: 2e07a8f0
+
+notes:
+  dedup: >
+    gh issue list -R Mu2e/mu2edaq-file-reaper --state all returned 0 issues on
+    2026-10-06; no fingerprint or title-token match was possible. FR-001 and FR-002
+    are the reaper side of mu2edaq-fts FTS-002 (b6517e10) and FTS-001/FTS-004
+    (b36928f6, a9628446). Filed separately on purpose: the fixes are independent
+    changes in different repositories and each closes half of the hazard.
+  no_s1: >
+    No S1. Every write path has a dry-run guard (actions.py:160-162, 241-244;
+    reaper.py:342, 520); the FTS gate fails closed on any sqlite3.Error
+    (fts_gate.py:46-72, reaper.py:411-420); actions re-verify parent and file
+    identity by descriptor before unlinkat (actions.py:96-170); every mutating API
+    route requires operate or admin scope, and session mutations require CSRF
+    (web/auth.py:116-135). The S2s are ways the gate or an operator exclusion can
+    be satisfied by the wrong file.
+  fts_contract: >
+    Table, columns (filepath, compressed_path, status) and status spellings agree
+    with mu2edaq-fts/docs/INTERFACES.md. Two statements there are slightly off for
+    the reaper side: an already-absent file is a 'vanished' skip, not a success
+    (actions.py:122-123); filepath is absolute only if fts's source_directory is
+    (fts/config.py:163). Recorded in docs/ISSUES-PENDING.md for the orchestrator.
+  tests_run: >
+    199 collected (pytest --co). Not re-run in this session: FR-015 documents that
+    running the suite with the checkout as working directory kills the launching
+    shell, including the CMake pytest target (CMakeLists.txt:30-37). The previous
+    review pass recorded 199/199 passing when launched from another directory.
