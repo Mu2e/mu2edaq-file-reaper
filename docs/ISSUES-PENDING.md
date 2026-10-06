@@ -152,7 +152,16 @@ act on a row that was re-armed during the pass; step 2 covers that window.
 
 **Title:** `[fts-gate] COMPLETED rows whose remote checksum mismatched or was never compared are deletable`
 
-**Severity:** S2 — production breakage or silent wrong behaviour; workaround exists
+**Severity:** S1 — data loss: deletes the only good copy of raw data in exactly the case the checksum check exists to catch
+
+> Severity raised from S2 by the review orchestrator (2026-10-06) after reading both sides:
+> `mu2edaq-fts/fts/poller.py:477-506` records a mismatch as `checksum_match=False`,
+> `ready_for_deletion=False` but leaves `status='COMPLETED'`, so fts's own cleaner refuses to
+> delete the source; this gate keys on `status` alone (`fts_gate.py:56`), so the reaper deletes it
+> once the area crosses a delete tier, and the corrupt remote copy becomes the only one. A rare
+> trigger is not a mitigation here: the corrupted transfer is the very event the check exists for.
+> Either side can close it: the gate requires `ready_for_deletion = 1` (or `status = 'DELETED'`),
+> or fts moves mismatched rows out of `COMPLETED`. Cross-reference FTS-001 in `Mu2e/mu2edaq-fts`.
 **Category:** bug
 **Location:** `src/mu2edaq_file_reaper/fts_gate.py:16`
 **Found by:** mega-review (`mu2e-sept-mega-review`), 2026-10-06

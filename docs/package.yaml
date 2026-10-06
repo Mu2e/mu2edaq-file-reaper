@@ -160,7 +160,7 @@ findings:
     issue: pending
     fingerprint: 87e72aad
   - id: FR-002
-    severity: S2
+    severity: S1
     type: bug
     title: "[fts-gate] COMPLETED rows whose remote checksum mismatched or was never compared are deletable"
     issue: pending
