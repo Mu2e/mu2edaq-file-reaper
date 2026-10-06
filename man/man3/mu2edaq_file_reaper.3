@@ -1,4 +1,4 @@
-.TH MU2EDAQ_FILE_REAPER 3 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.TH MU2EDAQ_FILE_REAPER 3 "2026-10-06" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
 .SH NAME
 mu2edaq_file_reaper \- Python API of the Mu2e DAQ file reaper
 .SH SYNOPSIS
@@ -198,7 +198,7 @@ One method per endpoint; raises
 .TP
 .B tokencache
 .BR load() ", " save(url,\ token,\ name) ", " get(url) ", " remove(url) .
-.SH EXAMPLE
+.SH EXAMPLES
 .nf
 from mu2edaq_file_reaper.domain import TierConfig
 from mu2edaq_file_reaper.watermarks import resolve_marks, tier_is_active
@@ -212,3 +212,5 @@ tier_is_active(85.0, marks, was_active=False)   # False: needs >= 90 to enter
 .BR mu2edaq-file-reaper (1),
 .BR mu2edaq-file-reaper.conf (5),
 .BR mu2edaq-file-reaper-api (7)
+.SH AUTHOR
+Mu2e DAQ group, Fermilab.

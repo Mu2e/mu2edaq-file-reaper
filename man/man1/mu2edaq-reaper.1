@@ -1,4 +1,4 @@
-.TH MU2EDAQ-REAPER 1 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.TH MU2EDAQ-REAPER 1 "2026-10-06" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
 .SH NAME
 mu2edaq-reaper \- command line client for mu2edaq-file-reaper instances
 .SH SYNOPSIS
@@ -99,10 +99,28 @@ Nothing is modified.
 .BR queues " [\-\-area " \fIA\fR "] [\-\-kind compress|delete] [\-\-status " \fIS\fR "] [\-\-limit " \fIN\fR ]
 List queued entries across areas.
 .TP
-.BI "exclude add" " PATTERN" " [\-\-area " A "] [\-\-kind path|glob] [\-\-reason " TEXT "] [\-\-expires\-in " DURATION ]
+.BI "exclude add" " PATTERN" " [\-\-area " A "] [\-\-kind path|glob|prefix|regex] [\-\-reason " TEXT "] [\-\-expires\-in " DURATION ]
 Add an exclusion (absolute path, directory prefix or glob).  Excluded files
 are never queued; an exclusion added while a queue is being worked takes
 effect before the next file.
+Only
+.B path
+and
+.B glob
+are implemented.  The daemon stores
+.B prefix
+and
+.B regex
+but does not interpret them: a pattern containing
+.BR * ", " ? " or " [
+is matched as an
+.BR fnmatch (3)
+glob, anything else as an exact path or whole-directory prefix, so a regular
+expression or a partial file-name prefix generally matches nothing.  Path patterns are
+compared with the area's resolved path; write
+.I /real/path
+rather than a symlinked mount point.  Check with
+.BR "mu2edaq-reaper plan" .
 .TP
 .BI "exclude rm" " ID"
 Deactivate an exclusion.
@@ -235,3 +253,5 @@ mu2edaq-reaper history --type action_delete --since 24h --csv - > deleted.csv
 .BR mu2edaq-file-reaper (1),
 .BR mu2edaq-file-reaper-api (7),
 .BR mu2edaq-discover (1)
+.SH AUTHOR
+Mu2e DAQ group, Fermilab.

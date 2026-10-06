@@ -1,4 +1,4 @@
-.TH MAKE_DEMO_TREE 1 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.TH MAKE_DEMO_TREE 1 "2026-10-06" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
 .SH NAME
 make_demo_tree.py \- build a demo file tree and fake-usage file for mu2edaq-file-reaper
 .SH SYNOPSIS
@@ -56,13 +56,15 @@ Incompressible content, to exercise the incompressible-skip path.
 .TP
 .BI \-\-seed " S"
 Random seed (default 1) for reproducible trees.
-.SH EXAMPLE
+.SH EXAMPLES
 .nf
 python tools/make_demo_tree.py ./data/demo --files 300 --days 30 --used-pct 92
-./start-mu2edaq-file-reaper.sh -c config/mu2edaq-file-reaper-test.yaml
+\&./start-mu2edaq-file-reaper.sh -c config/mu2edaq-file-reaper-test.yaml
 mu2edaq-reaper --url http://localhost:5004 --admin-token demo-admin token create demo --scopes read,operate,admin --save
 mu2edaq-reaper plan data-demo
 .fi
 .SH SEE ALSO
 .BR mu2edaq-file-reaper (1),
 .BR mu2edaq-file-reaper.conf (5)
+.SH AUTHOR
+Mu2e DAQ group, Fermilab.

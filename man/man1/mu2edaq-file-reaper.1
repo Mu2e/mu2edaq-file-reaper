@@ -1,4 +1,4 @@
-.TH MU2EDAQ-FILE-REAPER 1 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.TH MU2EDAQ-FILE-REAPER 1 "2026-10-06" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
 .SH NAME
 mu2edaq-file-reaper \- policy-driven disk cleanup daemon for the Mu2e DAQ
 .SH SYNOPSIS
@@ -118,7 +118,11 @@ Detach with the double-fork idiom (POSIX only).  The start script sets this.
 Write the daemon PID here.
 .TP
 .BI \-\-log\-file " FILE"
-Rotating log file (size and count from the configuration).
+Rotating log file (size and count from the configuration).  With
+.B \-\-daemon
+the file only receives the process's redirected standard error: no
+rotating handler is installed, so records below WARNING are dropped and
+lines carry no timestamp.
 .TP
 .BR \-v ", " \-\-verbose
 Debug logging.
@@ -130,7 +134,6 @@ with status 1 when an area was dropped.
 .B \-\-version
 Print the version and exit.
 .SH CONFIGURATION PRECEDENCE
-.PP
 .RS
 command line  >  environment  >  .env file  >  configuration file  >  built-in defaults
 .RE
@@ -212,6 +215,9 @@ hard-linked files, files modified within
 and files whose mu2edaq-fts status is not COMPLETED or DELETED when an
 .I fts_db
 gate is configured (an unreadable FTS database makes nothing eligible).
+The gate matches on path only and accepts COMPLETED before mu2edaq-fts has
+compared a remote checksum; see
+.BR mu2edaq-file-reaper.conf (5).
 Every action re-opens the parent directory and the file by descriptor and
 verifies device, inode, size, mtime and link count against the scan before
 acting; any difference is a skip.  Compression writes to a temporary file in
@@ -272,8 +278,8 @@ Start and stop as the control room does:
 .PP
 .RS
 .nf
-./start-mu2edaq-file-reaper.sh -c config/mu2e-file-reaper-dl-01.yaml
-./stop-mu2edaq-file-reaper.sh
+\&./start-mu2edaq-file-reaper.sh -c config/mu2e-file-reaper-dl-01.yaml
+\&./stop-mu2edaq-file-reaper.sh
 .fi
 .RE
 .SH SEE ALSO
@@ -285,5 +291,5 @@ Start and stop as the control room does:
 .BR mu2edaq-file-reaper-stop (1),
 .BR mu2edaq-file-reaper-bootstrap (1),
 .BR mu2edaq-diskwatcher (1)
-.SH AUTHORS
+.SH AUTHOR
 Mu2e DAQ group, Fermilab.

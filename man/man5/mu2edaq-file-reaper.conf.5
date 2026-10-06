@@ -1,4 +1,4 @@
-.TH MU2EDAQ-FILE-REAPER.CONF 5 "2026-09-11" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
+.TH MU2EDAQ-FILE-REAPER.CONF 5 "2026-10-06" "mu2edaq-file-reaper 0.1.0" "Mu2e DAQ Manual"
 .SH NAME
 mu2edaq-file-reaper.conf \- YAML configuration of the Mu2e DAQ file reaper
 .SH SYNOPSIS
@@ -213,6 +213,19 @@ Files modified more recently than this are never touched (default 300).
 Path to a mu2edaq-fts SQLite database.  When set, only files whose FTS status
 is COMPLETED or DELETED (or the reaper-compressed copy of such a file) are
 eligible.  An unreadable database makes nothing eligible and raises an alarm.
+The database is read once per pass.  The match is on the path string alone:
+the row's
+.I filepath
+or
+.IR compressed_path ,
+as recorded and as resolved by
+.BR realpath (3)
+when the snapshot is loaded.  No size, inode, time or checksum column is
+compared.  mu2edaq-fts writes COMPLETED when the transfer command exits 0,
+before any remote checksum comparison, and leaves the row COMPLETED if that
+comparison later fails.  mu2edaq-fts records only the top level of its one
+source directory, so files in subdirectories are never eligible.  The path
+must not contain the characters ?, # or %.
 .TP
 .B compression
 Block with
@@ -273,7 +286,7 @@ UDP broadcast to the control-room Big Red Box; default min_severity critical.
 .TP
 .B slack
 .BR webhook_url .
-.SH EXAMPLE
+.SH EXAMPLES
 .nf
 reaper:
   label: dl-01
@@ -312,7 +325,16 @@ Reference configuration with every key commented.
 .I config/.env.example
 Secrets template (
 .BR MU2EDAQ_FILE_REAPER_ADMIN_TOKEN ", " MU2EDAQ_NOTIFY_TOKEN ).
+Only
+.B MU2EDAQ_FILE_REAPER_*
+keys in a .env file are applied.
+.B MU2EDAQ_NOTIFY_TOKEN
+is read by the notification library from the real process environment only;
+set it there, or as
+.BR notifications.mu2e_notify.token .
 .SH SEE ALSO
 .BR mu2edaq-file-reaper (1),
 .BR mu2edaq-reaper (1),
 .BR mu2edaq-file-reaper-api (7)
+.SH AUTHOR
+Mu2e DAQ group, Fermilab.
